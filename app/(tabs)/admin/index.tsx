@@ -1,61 +1,141 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  RefreshControl,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
-import { usersApi, householdsApi } from '@/lib/api';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
+import { ThemedButton } from '@/components/ThemedButton';
+import { StatusBadge } from '@/components/StatusBadge';
+import { usersApi } from '@/lib/api';
 import { AuthStore } from '@/lib/auth';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
-interface StatCard {
-  label: string;
-  value: string | number;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  bg: string;
-}
+type Tab = 'users' | 'create';
 
-export default function DashboardScreen() {
-  const [user, setUser] = useState<User | null>(null);
-  const [nearbyCount, setNearbyCount] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+const CREATABLE_ROLES: Record<string, UserRole[]> = {
+  SUPER_ADMIN: ['ADMIN'],
+  ADMIN: ['FIELD_USER'],
+  FIELD_USER: [],
+};
+
+export default function AdminScreen() {
+  const [tab, setTab] = useState<Tab>('users');
   const role = AuthStore.getRole();
 
-  async function loadData() {
-    try {
-      const me = await usersApi.me();
-      setUser(me);
-    } catch {}
-    setLoading(false);
+  if (role === 'FIELD_USER') {
+    return (
+      <View style={styles.noAccess}>
+        <Ionicons name="lock-closed" size={48} color={Colors.border} />
+        <Text style={styles.noAccessText}>Admin access only</Text>
+      </View>
+    );
   }
+
+  return (
+    <View style={styles.flex}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerDecorLeft} />
+        <View style={styles.headerDecorRight} />
+        <View style={styles.headerContent}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="shield-checkmark" size={26} color={Colors.textPrimary} />
+          </View>
+          <View>
+            <Text style={styles.title}>Admin Panel</Text>
+            <Text style={styles.subtitle}>
+              {role === 'SUPER_ADMIN' ? 'Manage Admins' : 'Manage Field Users'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabBar}>
+        {(['users', 'create'] as Tab[]).map(t => (
+          <Pressable
+            key={t}
+            onPress={() => setTab(t)}
+            style={[styles.tabBtn, tab === t && styles.tabBtnActive]}
+          >
+            <Ionicons
+              name={t === 'users' ? 'people-outline' : 'person-add-outline'}
+              size={16}
+              color={tab === t ? Colors.primary : Colors.midGray}
+            />
+            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+              {t === 'users' ? 'User List' : 'Create User'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {tab === 'users' ? <UserList role={role!} /> : <CreateUser role={role!} onCreated={() => setTab('users')} />}
+    </View>
+  );
+}
+
+// ── User List ─────────────────────────────────────────────────────────────────
+function UserList({ role }: { role: string }) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      load();
     }, [])
   );
 
-  async function onRefresh() {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await usersApi.list(100, 0);
+      setUsers(res.items);
+      setTotal(res.total);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const roleLabel =
-    role === 'SUPER_ADMIN' ? 'Super Admin' :
-    role === 'ADMIN' ? 'Admin' : 'Field User';
-
-  const roleColor =
-    role === 'SUPER_ADMIN' ? Colors.gold :
-    role === 'ADMIN' ? Colors.info : Colors.success;
+  function confirmDelete(user: User) {
+    Alert.alert(
+      'Deactivate User',
+      `Deactivate ${user.name} (${user.phone})?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(user.id);
+            try {
+              await usersApi.delete(user.id);
+              setUsers(prev => prev.filter(u => u.id !== user.id));
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            } finally {
+              setDeleting(null);
+            }
+          },
+        },
+      ]
+    );
+  }
 
   if (loading) {
     return (
@@ -66,164 +146,282 @@ export default function DashboardScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerBg} />
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.greeting}>வணக்கம் 👋</Text>
-            <Text style={styles.userName}>{user?.name ?? 'Field User'}</Text>
+    <FlatList
+      data={users}
+      keyExtractor={u => u.id}
+      contentContainerStyle={styles.list}
+      ListHeaderComponent={
+        <Text style={styles.countLabel}>
+          {total} user{total !== 1 ? 's' : ''} found
+        </Text>
+      }
+      renderItem={({ item }) => (
+        <View style={styles.userCard}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.userAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
           </View>
-          <View style={[styles.rolePill, { borderColor: roleColor }]}>
-            <View style={[styles.roleDot, { backgroundColor: roleColor }]} />
-            <Text style={[styles.roleText, { color: roleColor }]}>{roleLabel}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.userName}>{item.name}</Text>
+            <Text style={styles.userPhone}>{item.phone}</Text>
+            <View style={styles.userMeta}>
+              <StatusBadge status={item.role} />
+              <Text style={styles.userDate}>
+                {new Date(item.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
+              </Text>
+            </View>
           </View>
+          <Pressable
+            onPress={() => confirmDelete(item)}
+            style={styles.deleteBtn}
+            disabled={deleting === item.id}
+          >
+            {deleting === item.id
+              ? <ActivityIndicator size="small" color={Colors.error} />
+              : <Ionicons name="person-remove-outline" size={18} color={Colors.error} />
+            }
+          </Pressable>
         </View>
-        <Text style={styles.headerSub}>
-          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        </Text>
-      </View>
-
-      {/* Quick Stats */}
-      <Text style={styles.sectionTitle}>Quick Stats</Text>
-      <View style={styles.statsGrid}>
-        <StatBox label="Phone" value={user?.phone ?? '—'} icon="call" color={Colors.primary} bg="#2A0A0A" />
-        <StatBox label="Role" value={roleLabel} icon="shield-checkmark" color={roleColor} bg="#0A1A2A" />
-        <StatBox label="Member Since" value={user ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'} icon="calendar" color={Colors.gold} bg="#1A1500" />
-        <StatBox label="Status" value={user?.deleted_at ? 'Inactive' : 'Active'} icon="checkmark-circle" color={Colors.success} bg="#0A1A0A" />
-      </View>
-
-      {/* Quick Actions */}
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
-      <View style={styles.actionsGrid}>
-        <ActionTile icon="home-outline" label="New Household" color={Colors.primary} />
-        <ActionTile icon="location-outline" label="Find Nearby" color={Colors.gold} />
-        <ActionTile icon="checkmark-done-outline" label="Verify" color={Colors.success} />
-        <ActionTile icon="people-outline" label="Bulk Upload" color={Colors.info} />
-      </View>
-
-      {/* About */}
-      <View style={styles.aboutCard}>
-        <Ionicons name="information-circle" size={20} color={Colors.primary} />
-        <Text style={styles.aboutText}>
-          Use the tabs below to collect household data, verify records, and manage your profile.
-          GPS coordinates are captured automatically on the Collect screen.
-        </Text>
-      </View>
-    </ScrollView>
+      )}
+      ListEmptyComponent={
+        <View style={styles.empty}>
+          <Ionicons name="people-outline" size={40} color={Colors.border} />
+          <Text style={styles.emptyText}>No users found</Text>
+        </View>
+      }
+    />
   );
 }
 
-function StatBox({ label, value, icon, color, bg }: {
-  label: string; value: string | number;
-  icon: keyof typeof Ionicons.glyphMap; color: string; bg: string;
-}) {
+// ── Create User ───────────────────────────────────────────────────────────────
+function CreateUser({ role, onCreated }: { role: string; onCreated: () => void }) {
+  const allowedRoles = CREATABLE_ROLES[role] ?? [];
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<UserRole>(allowedRoles[0] ?? 'FIELD_USER');
+  const [loading, setLoading] = useState(false);
+
+  async function handleCreate() {
+    if (!name.trim() || !phone.trim() || !password.trim()) {
+      Alert.alert('Required', 'All fields are required.');
+      return;
+    }
+    if (!/^\d{10,15}$/.test(phone.trim())) {
+      Alert.alert('Invalid Phone', 'Phone must be 10–15 digits.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await usersApi.create({
+        name: name.trim(),
+        phone: phone.trim(),
+        password,
+        role: selectedRole,
+      });
+      Alert.alert('✅ Created', `${name} has been added as ${selectedRole}.`, [
+        { text: 'OK', onPress: () => {
+          setName(''); setPhone(''); setPassword('');
+          onCreated();
+        }},
+      ]);
+    } catch (err: any) {
+      Alert.alert('Failed', err.message ?? 'Could not create user.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <View style={[styles.statBox, { backgroundColor: bg, borderColor: color + '33' }]}>
-      <View style={[styles.statIcon, { backgroundColor: color + '22' }]}>
-        <Ionicons name={icon} size={18} color={color} />
-      </View>
-      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.createContainer} keyboardShouldPersistTaps="handled">
+        <View style={styles.createCard}>
+          <Text style={styles.createTitle}>New User</Text>
+
+          <Field label="Full Name" icon="person-outline">
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Enter full name"
+              placeholderTextColor={Colors.midGray}
+              autoCapitalize="words"
+            />
+          </Field>
+
+          <Field label="Phone Number" icon="call-outline">
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="9XXXXXXXXX"
+              placeholderTextColor={Colors.midGray}
+              keyboardType="phone-pad"
+              maxLength={15}
+            />
+          </Field>
+
+          <Field label="Password" icon="lock-closed-outline">
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Min 6 characters"
+              placeholderTextColor={Colors.midGray}
+              secureTextEntry={!showPassword}
+            />
+            <Pressable onPress={() => setShowPassword(v => !v)} style={{ padding: 4 }}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={Colors.midGray}
+              />
+            </Pressable>
+          </Field>
+
+          <Text style={styles.fieldLabel}>Role</Text>
+          <View style={styles.roleRow}>
+            {allowedRoles.map(r => (
+              <Pressable
+                key={r}
+                onPress={() => setSelectedRole(r)}
+                style={[styles.roleBtn, selectedRole === r && styles.roleBtnActive]}
+              >
+                <Ionicons
+                  name={r === 'ADMIN' ? 'shield-checkmark-outline' : 'person-outline'}
+                  size={16}
+                  color={selectedRole === r ? Colors.textPrimary : Colors.midGray}
+                />
+                <Text style={[styles.roleBtnText, selectedRole === r && styles.roleBtnTextActive]}>
+                  {r}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <ThemedButton
+            title="Create User"
+            onPress={handleCreate}
+            loading={loading}
+            fullWidth
+            size="lg"
+            style={{ marginTop: Spacing.md }}
+          />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-function ActionTile({ icon, label, color }: {
-  icon: keyof typeof Ionicons.glyphMap; label: string; color: string;
-}) {
+function Field({ label, icon, children }: { label: string; icon: any; children: React.ReactNode }) {
   return (
-    <View style={[styles.actionTile, { borderColor: color + '44' }]}>
-      <View style={[styles.actionIcon, { backgroundColor: color + '22' }]}>
-        <Ionicons name={icon} size={22} color={color} />
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.inputWrap}>
+        <Ionicons name={icon} size={17} color={Colors.primary} style={{ marginRight: 8 }} />
+        {children}
       </View>
-      <Text style={styles.actionLabel}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: Colors.bgDark },
-  container: { paddingBottom: 32 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgDark },
+  flex: { flex: 1, backgroundColor: Colors.bgDark },
+  noAccess: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgDark, gap: 12 },
+  noAccessText: { fontSize: FontSizes.md, color: Colors.textMuted },
 
-  // Header
   header: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: 60,
-    paddingBottom: Spacing.xl,
+    paddingTop: 64, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg,
     overflow: 'hidden',
-    marginBottom: Spacing.lg,
   },
-  headerBg: {
+  headerDecorLeft: {
+    position: 'absolute', top: -20, left: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.primaryDark, opacity: 0.5,
+  },
+  headerDecorRight: {
     position: 'absolute', bottom: -30, right: -20,
-    width: 150, height: 150, borderRadius: 75,
+    width: 160, height: 160, borderRadius: 80,
     backgroundColor: Colors.primaryDark, opacity: 0.4,
   },
-  headerContent: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: 8,
+  headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  headerIconWrap: {
+    width: 48, height: 48, borderRadius: Radius.md,
+    backgroundColor: Colors.white10,
+    alignItems: 'center', justifyContent: 'center',
   },
-  greeting: { fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.8)', marginBottom: 2 },
-  userName: { fontSize: FontSizes.xl, fontWeight: '800', color: Colors.textPrimary },
-  rolePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: Radius.full, borderWidth: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  roleDot: { width: 7, height: 7, borderRadius: 4 },
-  roleText: { fontSize: FontSizes.xs, fontWeight: '700' },
-  headerSub: { fontSize: FontSizes.xs, color: 'rgba(255,255,255,0.65)' },
+  title: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
+  subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
 
-  sectionTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.md,
-    marginTop: Spacing.sm,
+  tabBar: {
+    flexDirection: 'row', backgroundColor: Colors.charcoal,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
+  tabBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, gap: 6, minHeight: 52,
+    borderBottomWidth: 2.5, borderBottomColor: 'transparent',
+  },
+  tabBtnActive: { borderBottomColor: Colors.primary },
+  tabText: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.midGray },
+  tabTextActive: { color: Colors.primary },
 
-  // Stats grid
-  statsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg, gap: 10, marginBottom: Spacing.lg,
-  },
-  statBox: {
-    width: '47%', borderRadius: Radius.md,
-    padding: Spacing.md, borderWidth: 1,
-  },
-  statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  statValue: { fontSize: FontSizes.md, fontWeight: '700', color: Colors.textPrimary, marginBottom: 2 },
-  statLabel: { fontSize: FontSizes.xs, color: Colors.textMuted },
+  list: { padding: Spacing.md, paddingBottom: 32 },
+  countLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: Spacing.sm, fontWeight: '700', letterSpacing: 0.3 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
+  emptyText: { color: Colors.textMuted, fontSize: FontSizes.sm },
 
-  // Actions grid
-  actionsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg, gap: 10, marginBottom: Spacing.xl,
-  },
-  actionTile: {
-    width: '47%', borderRadius: Radius.md,
-    padding: Spacing.md, borderWidth: 1,
-    backgroundColor: Colors.bgCard,
-    alignItems: 'center', paddingVertical: Spacing.lg,
-  },
-  actionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  actionLabel: { fontSize: FontSizes.sm, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
-
-  // About
-  aboutCard: {
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start',
+  userCard: {
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.bgCard, borderRadius: Radius.md,
-    marginHorizontal: Spacing.xl, padding: Spacing.md,
+    padding: Spacing.md, marginBottom: Spacing.sm, gap: 12,
     borderWidth: 1, borderColor: Colors.border,
+    ...Shadows.card,
   },
-  aboutText: { flex: 1, fontSize: FontSizes.sm, color: Colors.textMuted, lineHeight: 20 },
+  userAvatar: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: Colors.primaryMuted,
+    borderWidth: 2, borderColor: Colors.borderRed,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  userAvatarText: { fontSize: FontSizes.lg, fontWeight: '900', color: Colors.primary },
+  userName: { fontSize: FontSizes.md, fontWeight: '700', color: Colors.textPrimary },
+  userPhone: { fontSize: FontSizes.sm, color: Colors.textMuted, marginBottom: 6 },
+  userMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  userDate: { fontSize: FontSizes.xs, color: Colors.textMuted },
+  deleteBtn: { padding: Spacing.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+
+  createContainer: { padding: Spacing.md, paddingBottom: 48 },
+  createCard: {
+    backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
+    padding: Spacing.xl, borderWidth: 1, borderColor: Colors.border,
+    ...Shadows.card,
+  },
+  createTitle: { fontSize: FontSizes.xl, fontWeight: '800', color: Colors.textPrimary, marginBottom: Spacing.lg },
+
+  fieldGroup: { marginBottom: Spacing.md },
+  fieldLabel: { fontSize: FontSizes.xs, fontWeight: '700', color: Colors.textMuted, marginBottom: 6, letterSpacing: 0.4 },
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.bgCardRaised, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md, minHeight: 52,
+    borderWidth: 1.5, borderColor: Colors.border,
+  },
+  input: { flex: 1, fontSize: FontSizes.md, color: Colors.textPrimary },
+
+  roleRow: { flexDirection: 'row', gap: Spacing.sm },
+  roleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 13, borderRadius: Radius.md, minHeight: 50,
+    borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bgCardRaised,
+  },
+  roleBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  roleBtnText: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.midGray },
+  roleBtnTextActive: { color: Colors.textPrimary },
 });

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ThemedButton } from '@/components/ThemedButton';
 import { usersApi } from '@/lib/api';
@@ -63,11 +63,17 @@ export default function ProfileScreen() {
 
       {/* Header */}
       <View style={styles.header}>
+        <View style={styles.headerDecorLeft} />
+        <View style={styles.headerDecorRight} />
+        <View style={styles.headerDecorTop} />
+
         <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
-            </Text>
+          <View style={styles.avatarRing}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
+              </Text>
+            </View>
           </View>
           <View style={styles.avatarBadge}>
             <Ionicons name="checkmark" size={10} color={Colors.textPrimary} />
@@ -75,7 +81,9 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.userName}>{user?.name ?? '—'}</Text>
         <Text style={styles.userPhone}>{user?.phone ?? '—'}</Text>
-        {user && <StatusBadge status={user.role} />}
+        <View style={styles.roleChip}>
+          {user && <StatusBadge status={user.role} />}
+        </View>
       </View>
 
       {/* Account Details */}
@@ -137,12 +145,21 @@ export default function ProfileScreen() {
           variant="outline"
           fullWidth
           size="lg"
+          icon={<Ionicons name="log-out-outline" size={18} color={Colors.primary} />}
         />
       </View>
 
-      <Text style={styles.footer}>
-        ADMK Voter Data Platform · Built for Field Operations
-      </Text>
+      <View style={styles.footerRow}>
+        <View style={styles.footerLogoWrap}>
+          <View style={styles.footerDot} />
+        </View>
+        <Text style={styles.footer}>
+          AIADMK Voter Data Platform · v1.0
+        </Text>
+        <View style={styles.footerLogoWrap}>
+          <View style={styles.footerDot} />
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -183,62 +200,93 @@ function Separator() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: Colors.bgDark },
-  container: { paddingBottom: 48 },
+  container: { paddingBottom: 56 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgDark },
 
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 60, paddingBottom: Spacing.xl,
+    paddingTop: 64, paddingBottom: Spacing.xl,
     alignItems: 'center', gap: 6,
     overflow: 'hidden',
   },
+  headerDecorLeft: {
+    position: 'absolute', top: -20, left: -20,
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: Colors.primaryDark, opacity: 0.5,
+  },
+  headerDecorRight: {
+    position: 'absolute', bottom: -40, right: -40,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: Colors.primaryDark, opacity: 0.4,
+  },
+  headerDecorTop: {
+    position: 'absolute', top: 20, right: 30,
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: Colors.white10,
+  },
+
   avatarWrap: { position: 'relative', marginBottom: 4 },
+  avatarRing: {
+    width: 96, height: 96, borderRadius: 48,
+    borderWidth: 3, borderColor: Colors.gold,
+    padding: 3, alignItems: 'center', justifyContent: 'center',
+    ...Shadows.gold,
+  },
   avatar: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)',
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: Colors.white20,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary },
+  avatarText: { fontSize: FontSizes.huge, fontWeight: '900', color: Colors.textPrimary },
   avatarBadge: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: Colors.success, borderWidth: 2, borderColor: Colors.primary,
+    position: 'absolute', bottom: 2, right: 2,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.success,
+    borderWidth: 2.5, borderColor: Colors.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  userName: { fontSize: FontSizes.xl, fontWeight: '800', color: Colors.textPrimary },
-  userPhone: { fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.75)', marginBottom: 4 },
+  userName: { fontSize: FontSizes.xl, fontWeight: '900', color: Colors.textPrimary },
+  userPhone: { fontSize: FontSizes.sm, color: Colors.white60, marginBottom: 4 },
+  roleChip: { marginTop: 2 },
 
   section: { paddingHorizontal: Spacing.md, marginTop: Spacing.lg },
   sectionTitle: {
-    fontSize: FontSizes.sm, fontWeight: '700', color: Colors.textMuted,
-    letterSpacing: 0.8, marginBottom: Spacing.sm, marginLeft: 4,
+    fontSize: FontSizes.xs, fontWeight: '800', color: Colors.textMuted,
+    letterSpacing: 1, marginBottom: Spacing.sm, marginLeft: 4,
+    textTransform: 'uppercase',
   },
   infoCard: {
-    backgroundColor: Colors.bgCard, borderRadius: Radius.md,
+    backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
     borderWidth: 1, borderColor: Colors.border, overflow: 'hidden',
+    ...Shadows.card,
   },
   infoRow: {
     flexDirection: 'row', alignItems: 'center',
-    padding: Spacing.md, gap: 12,
+    padding: Spacing.md, gap: 12, minHeight: 56,
   },
   infoIconWrap: {
-    width: 32, height: 32, borderRadius: 8,
-    backgroundColor: Colors.primary + '1A',
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: Colors.primaryMuted,
+    borderWidth: 1, borderColor: Colors.borderRed,
     alignItems: 'center', justifyContent: 'center',
   },
   infoLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: 2 },
-  infoValue: { fontSize: FontSizes.sm, fontWeight: '600', color: Colors.textPrimary },
+  infoValue: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.textPrimary },
   menuRow: {
     flexDirection: 'row', alignItems: 'center',
-    padding: Spacing.md, gap: 12,
+    padding: Spacing.md, gap: 12, minHeight: 56,
   },
-  menuLabel: { flex: 1, fontSize: FontSizes.sm, fontWeight: '500', color: Colors.textPrimary },
+  menuLabel: { flex: 1, fontSize: FontSizes.sm, fontWeight: '600', color: Colors.textPrimary },
   sep: { height: 1, backgroundColor: Colors.border, marginLeft: 56 },
 
   logoutWrap: { padding: Spacing.xl, paddingTop: Spacing.lg },
+  footerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 8, paddingBottom: Spacing.lg,
+  },
+  footerLogoWrap: { alignItems: 'center' },
+  footerDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.border },
   footer: {
-    textAlign: 'center', fontSize: FontSizes.xs,
-    color: Colors.border, paddingBottom: Spacing.lg,
+    fontSize: FontSizes.xs, color: Colors.border,
   },
 });

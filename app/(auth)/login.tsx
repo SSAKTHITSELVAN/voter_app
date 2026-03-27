@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { authApi } from '@/lib/api';
 import { AuthStore } from '@/lib/auth';
@@ -23,6 +25,29 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [passFocused, setPassFocused] = useState(false);
+
+  // Entrance animation
+  const cardSlide = useRef(new Animated.Value(40)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(cardSlide, {
+        toValue: 0,
+        duration: 500,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 500,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   async function handleLogin() {
     if (!phone.trim() || !password.trim()) {
@@ -50,90 +75,150 @@ export default function LoginScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         bounces={false}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header Banner */}
+        {/* ── Hero Banner ─────────────────────────────────────── */}
         <View style={styles.banner}>
-          {/* Diagonal stripe accent */}
-          <View style={styles.stripeAccent} />
+          {/* Decorative shapes */}
+          <View style={styles.shapeTL} />
+          <View style={styles.shapeBR} />
+          <View style={styles.shapeCircle} />
 
-          <View style={styles.logoWrap}>
-            {/* ADMK-inspired emblem placeholder */}
-            <View style={styles.emblem}>
-              <Text style={styles.emblemText}>⚡</Text>
+          {/* Logo */}
+          <View style={styles.logoRing}>
+            <Image
+              source={require('@/assets/images/admk-logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Tamil title */}
+          <Text style={styles.appNameTamil}>வாக்காளர் சேகரிப்பு</Text>
+          <Text style={styles.appNameEn}>VOTER DATA COLLECTION</Text>
+
+          {/* Gold divider */}
+          <View style={styles.goldDivider} />
+
+          <View style={styles.partyTagRow}>
+            <View style={[styles.partyDot, { backgroundColor: Colors.leafGreen }]} />
+            <Text style={styles.partyTag}>AIADMK Field Operations</Text>
+            <View style={[styles.partyDot, { backgroundColor: Colors.leafGreen }]} />
+          </View>
+        </View>
+
+        {/* ── Login Card ──────────────────────────────────────── */}
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [{ translateY: cardSlide }],
+              opacity: cardOpacity,
+            },
+          ]}
+        >
+          {/* Card header */}
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconWrap}>
+              <Ionicons name="finger-print" size={22} color={Colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.cardTitle}>Field Login</Text>
+              <Text style={styles.cardSub}>Enter your credentials to continue</Text>
             </View>
           </View>
 
-          <Text style={styles.appName}>வாக்காளர் சேகரிப்பு</Text>
-          <Text style={styles.appNameEn}>VOTER DATA COLLECTION</Text>
-          <View style={styles.divider} />
-          <Text style={styles.partyTag}>ADMK Field Operations</Text>
-        </View>
+          <View style={styles.cardDivider} />
 
-        {/* Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Field Login</Text>
-          <Text style={styles.cardSub}>Enter your credentials to continue</Text>
-
-          {/* Phone */}
+          {/* ── Phone ─────────────────────────────────────────── */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <View style={styles.inputWrap}>
-              <Ionicons name="call-outline" size={18} color={Colors.primary} style={styles.inputIcon} />
+            <Text style={styles.label}>
+              <Text style={styles.labelDot}>● </Text>Phone Number
+            </Text>
+            <View style={[
+              styles.inputWrap,
+              phoneFocused && styles.inputWrapFocused,
+            ]}>
+              <View style={styles.inputIconWrap}>
+                <Ionicons name="call" size={17} color={phoneFocused ? Colors.primary : Colors.midGray} />
+              </View>
               <TextInput
                 style={styles.input}
                 placeholder="9XXXXXXXXX"
-                placeholderTextColor={Colors.midGray}
+                placeholderTextColor={Colors.textDim}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
                 maxLength={15}
                 autoComplete="tel"
+                onFocus={() => setPhoneFocused(true)}
+                onBlur={() => setPhoneFocused(false)}
               />
             </View>
           </View>
 
-          {/* Password */}
+          {/* ── Password ──────────────────────────────────────── */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrap}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.primary} style={styles.inputIcon} />
+            <Text style={styles.label}>
+              <Text style={styles.labelDot}>● </Text>Password
+            </Text>
+            <View style={[
+              styles.inputWrap,
+              passFocused && styles.inputWrapFocused,
+            ]}>
+              <View style={styles.inputIconWrap}>
+                <Ionicons name="lock-closed" size={17} color={passFocused ? Colors.primary : Colors.midGray} />
+              </View>
               <TextInput
                 style={[styles.input, { flex: 1 }]}
                 placeholder="Enter password"
-                placeholderTextColor={Colors.midGray}
+                placeholderTextColor={Colors.textDim}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
                 autoComplete="password"
+                onFocus={() => setPassFocused(true)}
+                onBlur={() => setPassFocused(false)}
               />
-              <Pressable onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn}>
+              <Pressable
+                onPress={() => setShowPassword(v => !v)}
+                style={styles.eyeBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  name={showPassword ? 'eye-off' : 'eye'}
                   size={18}
-                  color={Colors.midGray}
+                  color={passFocused ? Colors.primary : Colors.midGray}
                 />
               </Pressable>
             </View>
           </View>
 
-          <ThemedButton
-            title="LOGIN"
-            onPress={handleLogin}
-            loading={loading}
-            fullWidth
-            size="lg"
-            style={styles.loginBtn}
-          />
+          {/* ── Login Button ──────────────────────────────────── */}
+          <View style={styles.btnWrap}>
+            <ThemedButton
+              title="LOGIN TO FIELD APP"
+              onPress={handleLogin}
+              loading={loading}
+              fullWidth
+              size="lg"
+              icon={<Ionicons name="log-in" size={18} color={Colors.textPrimary} />}
+              style={Shadows.button}
+            />
+          </View>
 
-          <Text style={styles.hint}>
-            Contact your admin if you need access.
-          </Text>
+          <View style={styles.hintRow}>
+            <Ionicons name="information-circle-outline" size={13} color={Colors.textDim} />
+            <Text style={styles.hint}>Contact your admin if you need access.</Text>
+          </View>
+        </Animated.View>
+
+        {/* ── Footer ─────────────────────────────────────────── */}
+        <View style={styles.footerRow}>
+          <View style={styles.footerDot} />
+          <Text style={styles.footer}>Secure Field Data Platform · v1.0</Text>
+          <View style={styles.footerDot} />
         </View>
-
-        {/* Footer */}
-        <Text style={styles.footer}>
-          Secure Field Data Platform · v1.0
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -141,124 +226,223 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
-  container: { flexGrow: 1 },
+  container: { flexGrow: 1, backgroundColor: Colors.bgDark },
 
-  // Banner
+  // ── Banner ──────────────────────────────────────────────────────────────
   banner: {
     backgroundColor: Colors.primary,
-    paddingTop: 70,
-    paddingBottom: 40,
+    paddingTop: 72,
+    paddingBottom: 48,
     paddingHorizontal: Spacing.xl,
     alignItems: 'center',
     overflow: 'hidden',
+    position: 'relative',
   },
-  stripeAccent: {
+  shapeTL: {
     position: 'absolute',
-    bottom: -20,
-    right: -40,
-    width: 200,
-    height: 200,
+    top: -30,
+    left: -30,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
     backgroundColor: Colors.primaryDark,
-    transform: [{ rotate: '20deg' }],
-    opacity: 0.4,
+    opacity: 0.5,
   },
-  logoWrap: { marginBottom: Spacing.md },
-  emblem: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+  shapeBR: {
+    position: 'absolute',
+    bottom: -40,
+    right: -40,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: Colors.primaryDark,
+    opacity: 0.4,
+    transform: [{ rotate: '15deg' }],
+  },
+  shapeCircle: {
+    position: 'absolute',
+    top: 10,
+    right: 40,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.white10,
+  },
+
+  // Logo ring
+  logoRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: Colors.white,
+    borderWidth: 3,
+    borderColor: Colors.white80,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.md,
+    ...Shadows.header,
   },
-  emblemText: { fontSize: 32 },
-  appName: {
+  logoImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+  },
+
+  appNameTamil: {
     fontSize: 22,
     fontWeight: '900',
     color: Colors.textPrimary,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginBottom: 4,
+    textAlign: 'center',
   },
   appNameEn: {
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 3,
+    fontSize: FontSizes.xs,
+    fontWeight: '800',
+    color: Colors.white60,
+    letterSpacing: 3.5,
+    textAlign: 'center',
   },
-  divider: {
-    width: 40,
-    height: 2,
+  goldDivider: {
+    width: 48,
+    height: 2.5,
     backgroundColor: Colors.gold,
     marginVertical: Spacing.sm,
+    borderRadius: 2,
+  },
+  partyTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  partyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   partyTag: {
     fontSize: FontSizes.xs,
     color: Colors.gold,
-    fontWeight: '600',
-    letterSpacing: 1.5,
+    fontWeight: '700',
+    letterSpacing: 1.2,
   },
 
-  // Card
+  // ── Card ────────────────────────────────────────────────────────────────
   card: {
-    flex: 1,
-    backgroundColor: Colors.bgDark,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    backgroundColor: Colors.bgCard,
+    margin: Spacing.md,
+    borderRadius: Radius.xl,
     padding: Spacing.xl,
-    paddingTop: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: -Spacing.lg,
+    ...Shadows.card,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  cardIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.borderRed,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.xl,
     fontWeight: '800',
     color: Colors.textPrimary,
-    marginBottom: 4,
   },
   cardSub: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     color: Colors.textMuted,
-    marginBottom: Spacing.xl,
+    marginTop: 2,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: Spacing.lg,
   },
 
-  // Fields
-  fieldGroup: { marginBottom: Spacing.lg },
+  // ── Fields ──────────────────────────────────────────────────────────────
+  fieldGroup: { marginBottom: Spacing.md },
   label: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     fontWeight: '600',
     color: Colors.textSecondary,
     marginBottom: Spacing.xs,
     letterSpacing: 0.3,
   },
+  labelDot: { color: Colors.primary },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.bgCard,
-    borderWidth: 1,
+    backgroundColor: Colors.bgCardRaised,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    height: 52,
+    height: 54,
+    overflow: 'hidden',
   },
-  inputIcon: { marginRight: Spacing.sm },
+  inputWrapFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryMuted,
+  },
+  inputIconWrap: {
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     flex: 1,
     fontSize: FontSizes.md,
     color: Colors.textPrimary,
+    paddingRight: Spacing.sm,
   },
-  eyeBtn: { padding: 4 },
+  eyeBtn: {
+    padding: Spacing.md,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  loginBtn: { marginTop: Spacing.sm, marginBottom: Spacing.md },
+  btnWrap: { marginTop: Spacing.sm, marginBottom: Spacing.sm },
+
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: Spacing.xs,
+  },
   hint: {
     fontSize: FontSizes.xs,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: Spacing.sm,
+    color: Colors.textDim,
+  },
+
+  // ── Footer ──────────────────────────────────────────────────────────────
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Spacing.lg,
+  },
+  footerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
   },
   footer: {
-    textAlign: 'center',
     fontSize: FontSizes.xs,
     color: Colors.border,
-    paddingVertical: Spacing.lg,
   },
 });

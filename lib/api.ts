@@ -17,7 +17,7 @@ import {
 // Android emulator  → http://10.0.2.2:8000
 // iOS simulator     → http://localhost:8000
 // Physical device   → http://<your-LAN-IP>:8000
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = 'https://qsgtzg7g-8000.inc1.devtunnels.ms';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

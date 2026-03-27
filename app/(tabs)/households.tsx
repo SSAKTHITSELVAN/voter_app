@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { HouseholdCard } from '@/components/HouseholdCard';
 import { ThemedButton } from '@/components/ThemedButton';
 import { householdsApi } from '@/lib/api';
@@ -77,12 +77,24 @@ export default function HouseholdsScreen() {
     <View style={styles.flex}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Nearby Households</Text>
-        {myLat !== null && (
-          <Text style={styles.subtitle}>
-            <Ionicons name="navigate" size={11} /> {myLat.toFixed(4)}, {myLon?.toFixed(4)}
-          </Text>
-        )}
+        <View style={styles.headerDecorLeft} />
+        <View style={styles.headerDecorRight} />
+        <View style={styles.headerContent}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="home" size={26} color={Colors.textPrimary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Nearby Households</Text>
+            {myLat !== null && (
+              <Text style={styles.subtitle}>
+                {myLat.toFixed(4)}, {myLon?.toFixed(4)}
+              </Text>
+            )}
+          </View>
+          <Pressable onPress={fetchNearby} style={styles.refreshHeaderBtn} disabled={loading}>
+            <Ionicons name="refresh" size={20} color={loading ? Colors.white20 : Colors.textPrimary} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Radius filter */}
@@ -240,10 +252,32 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 60, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg,
+    paddingTop: 64, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg,
+    overflow: 'hidden',
   },
-  title: { fontSize: FontSizes.xxl, fontWeight: '800', color: Colors.textPrimary },
-  subtitle: { fontSize: FontSizes.xs, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  headerDecorLeft: {
+    position: 'absolute', top: -20, left: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.primaryDark, opacity: 0.5,
+  },
+  headerDecorRight: {
+    position: 'absolute', bottom: -30, right: -20,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: Colors.primaryDark, opacity: 0.4,
+  },
+  headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  headerIconWrap: {
+    width: 48, height: 48, borderRadius: Radius.md,
+    backgroundColor: Colors.white10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  refreshHeaderBtn: {
+    width: 44, height: 44, borderRadius: Radius.md,
+    backgroundColor: Colors.white10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
+  subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
 
   radiusRow: {
     flexDirection: 'row', alignItems: 'center',

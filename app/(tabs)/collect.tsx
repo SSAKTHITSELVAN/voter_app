@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { householdsApi } from '@/lib/api';
 import { GenderType, HouseType, Person } from '@/lib/types';
@@ -160,18 +160,35 @@ export default function CollectScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Header */}
         <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Collect Household</Text>
-          <Text style={styles.pageSub}>Record voter data at this location</Text>
+          <View style={styles.headerDecorLeft} />
+          <View style={styles.headerDecorRight} />
+          <View style={styles.headerContent}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="add-circle" size={28} color={Colors.textPrimary} />
+            </View>
+            <View>
+              <Text style={styles.pageTitle}>Collect Household</Text>
+              <Text style={styles.pageSub}>Record voter data at this location</Text>
+            </View>
+          </View>
+          {/* Progress chip */}
+          <View style={styles.progressChip}>
+            <Ionicons name="people" size={12} color={Colors.gold} />
+            <Text style={styles.progressChipText}>{persons.length} persons · {voterCount} voters</Text>
+          </View>
         </View>
 
         {/* GPS Card */}
-        <View style={[styles.card, gpsAcquired && styles.cardSuccess]}>
+        <View style={[styles.card, gpsAcquired ? styles.cardSuccess : styles.cardNeutral]}>
           <View style={styles.cardRow}>
-            <View style={styles.cardIconWrap}>
+            <View style={[
+              styles.cardIconWrap,
+              { backgroundColor: gpsAcquired ? Colors.successMuted : Colors.primaryMuted }
+            ]}>
               <Ionicons name="navigate" size={20} color={gpsAcquired ? Colors.success : Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
@@ -184,11 +201,12 @@ export default function CollectScreen() {
               ) : gpsAcquired ? (
                 <Text style={styles.gpsCoords}>{latitude},  {longitude}</Text>
               ) : (
-                <Text style={styles.gpsError}>Not acquired</Text>
+                <Text style={styles.gpsError}>Tap refresh to get location</Text>
               )}
             </View>
-            <Pressable onPress={getLocation} style={styles.refreshBtn} disabled={gpsLoading}>
-              <Ionicons name="refresh" size={18} color={Colors.primary} />
+            <Pressable onPress={getLocation} style={styles.refreshBtn} disabled={gpsLoading}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="refresh" size={20} color={gpsLoading ? Colors.midGray : Colors.primary} />
             </Pressable>
           </View>
 
@@ -361,12 +379,17 @@ export default function CollectScreen() {
         {/* Submit */}
         <View style={styles.submitWrap}>
           <ThemedButton
-            title={submitting ? 'Submitting…' : `Submit Household (${voterCount} voters)`}
+            title={`Submit Household`}
             onPress={handleSubmit}
             loading={submitting}
             fullWidth
             size="lg"
+            icon={<Ionicons name="cloud-upload" size={18} color={Colors.textPrimary} />}
+            style={Shadows.button}
           />
+          <Text style={styles.submitHint}>
+            {voterCount} voter{voterCount !== 1 ? 's' : ''} in {persons.length} person{persons.length !== 1 ? 's' : ''}
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -376,18 +399,45 @@ export default function CollectScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
   scroll: { flex: 1 },
-  container: { paddingBottom: 48 },
+  container: { paddingBottom: 56 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
+  // ── Header ────────────────────────────────────────────────────────────────
   pageHeader: {
     backgroundColor: Colors.primary,
-    paddingTop: 60,
+    paddingTop: 64,
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xl,
+    overflow: 'hidden',
   },
-  pageTitle: { fontSize: FontSizes.xxl, fontWeight: '800', color: Colors.textPrimary },
-  pageSub: { fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
+  headerDecorLeft: {
+    position: 'absolute', top: -20, left: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.primaryDark, opacity: 0.5,
+  },
+  headerDecorRight: {
+    position: 'absolute', bottom: -30, right: -20,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: Colors.primaryDark, opacity: 0.4,
+  },
+  headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.sm },
+  headerIconWrap: {
+    width: 48, height: 48, borderRadius: Radius.md,
+    backgroundColor: Colors.white10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pageTitle: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
+  pageSub: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
+  progressChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.white10,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: Radius.full, alignSelf: 'flex-start',
+    marginTop: Spacing.sm,
+  },
+  progressChipText: { fontSize: FontSizes.xs, color: Colors.gold, fontWeight: '700' },
 
+  // ── Cards ─────────────────────────────────────────────────────────────────
   card: {
     backgroundColor: Colors.bgCard,
     margin: Spacing.md,
@@ -396,58 +446,67 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    ...Shadows.card,
   },
-  cardSuccess: { borderColor: Colors.success + '66' },
+  cardSuccess: { borderColor: Colors.success + '66', backgroundColor: Colors.successMuted + '22' },
+  cardNeutral: { borderColor: Colors.border },
   cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
   cardIconWrap: {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: Colors.darkGray, alignItems: 'center', justifyContent: 'center',
+    width: 44, height: 44, borderRadius: Radius.md,
+    alignItems: 'center', justifyContent: 'center',
   },
-  cardLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: 2, fontWeight: '600' },
+  cardLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: 2, fontWeight: '700', letterSpacing: 0.4 },
   gpsLoading: { fontSize: FontSizes.sm, color: Colors.textMuted },
-  gpsCoords: { fontSize: FontSizes.sm, color: Colors.success, fontFamily: 'monospace', fontWeight: '600' },
+  gpsCoords: { fontSize: FontSizes.sm, color: Colors.success, fontWeight: '700' },
   gpsError: { fontSize: FontSizes.sm, color: Colors.error },
-  refreshBtn: { padding: Spacing.sm },
+  refreshBtn: { padding: Spacing.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 
   coordRow: { flexDirection: 'row', gap: Spacing.sm },
   coordField: { flex: 1 },
-  coordLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: 4 },
+  coordLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: 4, fontWeight: '600' },
   coordInput: {
-    backgroundColor: Colors.darkGray,
+    backgroundColor: Colors.bgCardRaised,
     borderRadius: Radius.sm,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 8,
+    paddingVertical: 10,
     fontSize: FontSizes.sm,
     color: Colors.textPrimary,
-    fontFamily: 'monospace',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
   },
 
-  sectionLabel: { fontSize: FontSizes.md, fontWeight: '700', color: Colors.textPrimary, marginBottom: Spacing.md },
-  fieldLabel: { fontSize: FontSizes.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: 6, letterSpacing: 0.3 },
+  sectionLabel: {
+    fontSize: FontSizes.md, fontWeight: '800', color: Colors.textPrimary,
+    marginBottom: Spacing.md, letterSpacing: 0.2,
+  },
+  fieldLabel: {
+    fontSize: FontSizes.xs, fontWeight: '700',
+    color: Colors.textMuted, marginBottom: 6, letterSpacing: 0.4,
+  },
   fieldGroup: { marginBottom: Spacing.md },
 
   textInput: {
-    backgroundColor: Colors.darkGray,
+    backgroundColor: Colors.bgCardRaised,
     borderRadius: Radius.sm,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: FontSizes.md,
     color: Colors.textPrimary,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
+    minHeight: 48,
   },
-  multiline: { minHeight: 60, textAlignVertical: 'top' },
+  multiline: { minHeight: 70, textAlignVertical: 'top' },
 
   toggleRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
   toggleBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10, borderRadius: Radius.sm,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.darkGray,
+    gap: 6, paddingVertical: 12, borderRadius: Radius.md,
+    borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bgCardRaised,
+    minHeight: 48,
   },
   toggleBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  toggleText: { fontSize: FontSizes.sm, color: Colors.midGray, fontWeight: '600' },
+  toggleText: { fontSize: FontSizes.sm, color: Colors.midGray, fontWeight: '700' },
   toggleTextActive: { color: Colors.textPrimary },
 
   personsHeader: {
@@ -457,43 +516,51 @@ const styles = StyleSheet.create({
   personsCount: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2 },
   addPersonBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.primary,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.primary,
+    backgroundColor: Colors.primaryMuted,
+    minHeight: 44,
   },
-  addPersonText: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '600' },
+  addPersonText: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '700' },
 
   personCard: {
-    backgroundColor: Colors.darkGray, borderRadius: Radius.md,
+    backgroundColor: Colors.bgCardRaised, borderRadius: Radius.md,
     padding: Spacing.md, marginBottom: Spacing.md,
-    borderWidth: 1, borderColor: Colors.border,
+    borderWidth: 1, borderColor: Colors.borderLight,
+    borderLeftWidth: 3, borderLeftColor: Colors.primary,
   },
   personHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: Spacing.md,
   },
   personNumBadge: {
-    width: 24, height: 24, borderRadius: 12,
+    width: 28, height: 28, borderRadius: 14,
     backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    ...Shadows.button,
   },
-  personNum: { fontSize: FontSizes.xs, fontWeight: '700', color: Colors.textPrimary },
+  personNum: { fontSize: FontSizes.xs, fontWeight: '800', color: Colors.textPrimary },
   personTitle: { flex: 1, fontSize: FontSizes.sm, fontWeight: '700', color: Colors.textSecondary },
   personRow: { flexDirection: 'row', alignItems: 'flex-start' },
 
   genderRow: { flexDirection: 'row', gap: 6 },
   genderBtn: {
-    width: 40, height: 36, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border,
+    flex: 1, height: 44, alignItems: 'center', justifyContent: 'center',
+    borderRadius: Radius.sm, borderWidth: 1.5, borderColor: Colors.border,
     backgroundColor: Colors.bgCard,
   },
   genderBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  genderText: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.midGray },
+  genderText: { fontSize: FontSizes.sm, fontWeight: '800', color: Colors.midGray },
   genderTextActive: { color: Colors.textPrimary },
 
   voterRow: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingTop: Spacing.sm,
-    borderTopWidth: 1, borderTopColor: Colors.border,
+    alignItems: 'center', paddingTop: Spacing.md,
+    borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Spacing.sm,
   },
-  voterSub: { fontSize: FontSizes.xs, color: Colors.textMuted },
+  voterSub: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2 },
 
   submitWrap: { padding: Spacing.xl, paddingTop: Spacing.lg },
+  submitHint: {
+    textAlign: 'center', fontSize: FontSizes.xs,
+    color: Colors.textMuted, marginTop: Spacing.sm,
+  },
 });

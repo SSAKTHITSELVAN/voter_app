@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { householdsApi, verificationApi } from '@/lib/api';
 import { HouseholdBrief, VerificationStatus } from '@/lib/types';
@@ -85,8 +85,17 @@ export default function VerifyScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Verify Household</Text>
-          <Text style={styles.subtitle}>Confirm collected data at a location</Text>
+          <View style={styles.headerDecorLeft} />
+          <View style={styles.headerDecorRight} />
+          <View style={styles.headerContent}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="checkmark-circle" size={28} color={Colors.textPrimary} />
+            </View>
+            <View>
+              <Text style={styles.title}>Verify Household</Text>
+              <Text style={styles.subtitle}>Confirm collected data at a location</Text>
+            </View>
+          </View>
         </View>
 
         {/* Step indicators */}
@@ -98,7 +107,8 @@ export default function VerifyScreen() {
             return (
               <React.Fragment key={label}>
                 <View style={styles.stepItem}>
-                  <View style={[styles.stepCircle,
+                  <View style={[
+                    styles.stepCircle,
                     active && styles.stepCircleActive,
                     done && styles.stepCircleDone,
                   ]}>
@@ -108,9 +118,9 @@ export default function VerifyScreen() {
                       <Text style={[styles.stepNum, active && styles.stepNumActive]}>{i + 1}</Text>
                     )}
                   </View>
-                  <Text style={[styles.stepLabel, active && styles.stepLabelActive]}>{label}</Text>
+                  <Text style={[styles.stepLabel, active && styles.stepLabelActive, done && styles.stepLabelDone]}>{label}</Text>
                 </View>
-                {i < 2 && <View style={[styles.stepLine, done && styles.stepLineDone]} />}
+                {i < 2 && <View style={[styles.stepLine, (done || (active && i > 0)) && styles.stepLineDone]} />}
               </React.Fragment>
             );
           })}
@@ -286,14 +296,31 @@ export default function VerifyScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
   scroll: { flex: 1 },
-  container: { paddingBottom: 48 },
+  container: { paddingBottom: 56 },
 
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 60, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl,
+    paddingTop: 64, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl,
+    overflow: 'hidden',
   },
-  title: { fontSize: FontSizes.xxl, fontWeight: '800', color: Colors.textPrimary },
-  subtitle: { fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
+  headerDecorLeft: {
+    position: 'absolute', top: -20, left: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.primaryDark, opacity: 0.5,
+  },
+  headerDecorRight: {
+    position: 'absolute', bottom: -30, right: -20,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: Colors.primaryDark, opacity: 0.4,
+  },
+  headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  headerIconWrap: {
+    width: 48, height: 48, borderRadius: Radius.md,
+    backgroundColor: Colors.white10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
+  subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
 
   // Steps
   steps: {
@@ -301,72 +328,75 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg, paddingHorizontal: Spacing.xl,
     backgroundColor: Colors.charcoal, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  stepItem: { alignItems: 'center', gap: 4 },
+  stepItem: { alignItems: 'center', gap: 5 },
   stepCircle: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: Colors.darkGray, borderWidth: 1, borderColor: Colors.border,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.darkGray, borderWidth: 1.5, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  stepCircleActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '22' },
+  stepCircleActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
   stepCircleDone: { backgroundColor: Colors.success, borderColor: Colors.success },
   stepNum: { fontSize: FontSizes.xs, fontWeight: '700', color: Colors.midGray },
   stepNumActive: { color: Colors.primary },
   stepLabel: { fontSize: 10, color: Colors.midGray, fontWeight: '600' },
-  stepLabelActive: { color: Colors.primary },
-  stepLine: { flex: 1, height: 1.5, backgroundColor: Colors.border, marginBottom: 14, marginHorizontal: 6 },
+  stepLabelActive: { color: Colors.primary, fontWeight: '700' },
+  stepLabelDone: { color: Colors.success },
+  stepLine: { flex: 1, height: 2, backgroundColor: Colors.border, marginBottom: 16, marginHorizontal: 4 },
   stepLineDone: { backgroundColor: Colors.success },
 
   card: {
     backgroundColor: Colors.bgCard, margin: Spacing.md, marginTop: Spacing.lg,
     borderRadius: Radius.lg, padding: Spacing.xl,
-    borderWidth: 1, borderColor: Colors.border,
+    borderWidth: 1, borderColor: Colors.border, ...Shadows.card,
   },
   iconBlock: { alignItems: 'center', marginBottom: Spacing.md },
   cardTitle: { fontSize: FontSizes.xl, fontWeight: '800', color: Colors.textPrimary, marginBottom: 8 },
   cardDesc: { fontSize: FontSizes.sm, color: Colors.textMuted, lineHeight: 20 },
 
   pickHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  changeBtn: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '600' },
+  changeBtn: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '700' },
   pickItem: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.darkGray, borderRadius: Radius.md,
+    backgroundColor: Colors.bgCardRaised, borderRadius: Radius.md,
     padding: Spacing.md, marginBottom: Spacing.sm,
     borderWidth: 1, borderColor: Colors.border,
+    minHeight: 56,
   },
   pickLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  pickAddress: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500', maxWidth: 220 },
+  pickAddress: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '600', maxWidth: 220 },
   pickDist: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2 },
   emptyPick: { alignItems: 'center', paddingVertical: Spacing.xl },
   emptyPickText: { color: Colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' },
 
   selectedCard: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.darkGray, borderRadius: Radius.md,
+    backgroundColor: Colors.bgCardRaised, borderRadius: Radius.md,
     padding: Spacing.md, marginBottom: Spacing.lg,
-    borderWidth: 1, borderColor: Colors.primary + '44',
+    borderWidth: 1.5, borderColor: Colors.borderRed,
   },
-  selectedText: { flex: 1, fontSize: FontSizes.sm, color: Colors.textPrimary },
+  selectedText: { flex: 1, fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
 
-  fieldLabel: { fontSize: FontSizes.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: 8, letterSpacing: 0.3 },
+  fieldLabel: { fontSize: FontSizes.xs, fontWeight: '700', color: Colors.textMuted, marginBottom: 8, letterSpacing: 0.4 },
   statusRow: { flexDirection: 'row', gap: Spacing.sm },
   statusBtn: {
     flex: 1, alignItems: 'center', padding: Spacing.md,
     borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.border,
-    backgroundColor: Colors.darkGray, gap: 4,
+    backgroundColor: Colors.bgCardRaised, gap: 4, minHeight: 80,
+    justifyContent: 'center',
   },
-  statusBtnMatched: { borderColor: Colors.success, backgroundColor: '#0D2018' },
-  statusBtnMismatch: { borderColor: Colors.error, backgroundColor: '#200D0D' },
-  statusBtnText: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.midGray },
+  statusBtnMatched: { borderColor: Colors.success, backgroundColor: Colors.successMuted },
+  statusBtnMismatch: { borderColor: Colors.error, backgroundColor: Colors.errorMuted },
+  statusBtnText: { fontSize: FontSizes.sm, fontWeight: '800', color: Colors.midGray },
   statusBtnSub: { fontSize: FontSizes.xs, color: Colors.textMuted, textAlign: 'center' },
 
   notesInput: {
-    backgroundColor: Colors.darkGray, borderRadius: Radius.sm,
+    backgroundColor: Colors.bgCardRaised, borderRadius: Radius.md,
     padding: Spacing.md, fontSize: FontSizes.md, color: Colors.textPrimary,
-    borderWidth: 1, borderColor: Colors.border,
-    textAlignVertical: 'top', minHeight: 80,
+    borderWidth: 1.5, borderColor: Colors.border,
+    textAlignVertical: 'top', minHeight: 88,
   },
 
-  doneIcon: { alignItems: 'center', marginBottom: Spacing.md },
-  doneTitle: { fontSize: FontSizes.xl, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
-  doneDesc: { fontSize: FontSizes.sm, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  doneIcon: { alignItems: 'center', marginBottom: Spacing.lg },
+  doneTitle: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
+  doneDesc: { fontSize: FontSizes.sm, color: Colors.textMuted, textAlign: 'center', lineHeight: 22 },
 });

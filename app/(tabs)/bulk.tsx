@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { householdsApi } from '@/lib/api';
 import { GenderType, HouseType, HouseholdCreate } from '@/lib/types';
@@ -160,7 +160,14 @@ export default function BulkScreen() {
     return (
       <View style={styles.flex}>
         <View style={styles.header}>
-          <Text style={styles.title}>Bulk Upload</Text>
+          <View style={styles.headerDecorLeft} />
+          <View style={styles.headerDecorRight} />
+          <View style={styles.headerContent}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="cloud-upload" size={26} color={Colors.textPrimary} />
+            </View>
+            <Text style={styles.title}>Bulk Upload</Text>
+          </View>
         </View>
         <ScrollView contentContainerStyle={styles.resultContainer}>
           <View style={styles.resultCard}>
@@ -205,8 +212,17 @@ export default function BulkScreen() {
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
-        <Text style={styles.title}>Bulk Upload</Text>
-        <Text style={styles.subtitle}>Sync offline-collected households</Text>
+        <View style={styles.headerDecorLeft} />
+        <View style={styles.headerDecorRight} />
+        <View style={styles.headerContent}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="cloud-upload" size={26} color={Colors.textPrimary} />
+          </View>
+          <View>
+            <Text style={styles.title}>Bulk Upload</Text>
+            <Text style={styles.subtitle}>Sync offline-collected households</Text>
+          </View>
+        </View>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -372,11 +388,28 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 60, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg,
+    paddingTop: 64, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg,
+    overflow: 'hidden',
   },
-  title: { fontSize: FontSizes.xxl, fontWeight: '800', color: Colors.textPrimary },
-  subtitle: { fontSize: FontSizes.sm, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
-  container: { padding: Spacing.md, paddingBottom: 48 },
+  headerDecorLeft: {
+    position: 'absolute', top: -20, left: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.primaryDark, opacity: 0.5,
+  },
+  headerDecorRight: {
+    position: 'absolute', bottom: -30, right: -20,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: Colors.primaryDark, opacity: 0.4,
+  },
+  headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  headerIconWrap: {
+    width: 48, height: 48, borderRadius: Radius.md,
+    backgroundColor: Colors.white10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
+  subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
+  container: { padding: Spacing.md, paddingBottom: 56 },
 
   infoBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
