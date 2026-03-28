@@ -28,11 +28,20 @@ interface PersonForm {
   is_voter: boolean;
 }
 
+type BannerType = 'success' | 'error' | 'warning' | 'info' | null;
+
+interface Banner {
+  type: BannerType;
+  message: string;
+}
+
 function blankPerson(): PersonForm {
   return { age: '', gender: null, is_voter: false };
 }
 
 export default function CollectScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -46,9 +55,29 @@ export default function CollectScreen() {
   const [persons, setPersons] = useState<PersonForm[]>([blankPerson()]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Inline banner instead of just Alerts
+  const [banner, setBanner] = useState<Banner>({ type: null, message: '' });
+  const bannerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showBanner(type: Exclude<BannerType, null>, message: string, autoDismissMs = 4000) {
+    if (bannerTimeout.current) clearTimeout(bannerTimeout.current);
+    setBanner({ type, message });
+    if (autoDismissMs > 0) {
+      bannerTimeout.current = setTimeout(() => setBanner({ type: null, message: '' }), autoDismissMs);
+    }
+  }
+
+  function hideBanner() {
+    if (bannerTimeout.current) clearTimeout(bannerTimeout.current);
+    setBanner({ type: null, message: '' });
+  }
+
   // Auto-get GPS on mount
   useEffect(() => {
     getLocation();
+    return () => {
+      if (bannerTimeout.current) clearTimeout(bannerTimeout.current);
+    };
   }, []);
 
   async function getLocation() {
@@ -86,15 +115,17 @@ export default function CollectScreen() {
   }
 
   async function handleSubmit() {
+    hideBanner();
     const lat = parseFloat(latitude);
     const lon = parseFloat(longitude);
 
     if (isNaN(lat) || isNaN(lon)) {
-      Alert.alert('Location Required', 'Please get GPS coordinates before submitting.');
+      showBanner('error', 'Please get GPS coordinates before submitting.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (houseType === 'APARTMENT' && !unitId.trim()) {
-      Alert.alert('Unit Required', 'Please enter Unit ID for apartment households.');
+      showBanner('error', 'Please enter Unit ID for apartment households.');
       return;
     }
 
@@ -103,19 +134,26 @@ export default function CollectScreen() {
       // Duplicate check first
       const check = await householdsApi.duplicateCheck(lat, lon, 20);
       if (check.has_duplicates) {
+        // Stop submitting while user decides — they can still cancel
+        setSubmitting(false);
         Alert.alert(
-          'Duplicate Detected',
-          `${check.duplicates.length} similar household(s) found within 20m. Do you want to proceed?`,
+          '⚠️ Duplicate Detected',
+          `${check.duplicates.length} similar household(s) found within 20m.\n\nDo you want to proceed anyway?`,
           [
-            { text: 'Cancel', style: 'cancel', onPress: () => setSubmitting(false) },
-            { text: 'Proceed', style: 'destructive', onPress: () => doCreate(lat, lon) },
+            { text: 'Cancel', style: 'cancel', onPress: () => {
+              showBanner('info', `${check.duplicates.length} duplicate(s) found nearby. Submission cancelled.`);
+            }},
+            { text: 'Proceed', style: 'destructive', onPress: () => {
+              setSubmitting(true);
+              doCreate(lat, lon);
+            }},
           ]
         );
         return;
       }
       await doCreate(lat, lon);
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'Failed to submit.');
+      showBanner('error', err.message ?? 'Failed to submit. Please try again.');
       setSubmitting(false);
     }
   }
@@ -136,31 +174,60 @@ export default function CollectScreen() {
         })),
         image_urls: [],
       });
-      Alert.alert('✅ Success', 'Household recorded successfully!', [
-        { text: 'Add Another', onPress: resetForm },
-        { text: 'Done' },
-      ]);
+
+      // Always clear the form immediately after success (keepBanner=true so success banner stays visible)
+      resetForm(true);
+
+      // Show inline success banner (called after resetForm so hideBanner inside resetForm doesn't wipe it)
+      showBanner('success', '✅ Household recorded successfully! Form cleared.', 6000);
+
+      // Simple confirmation — form is already reset either way
+      Alert.alert('✅ Submitted!', 'Household recorded successfully. Form has been cleared for the next entry.');
     } catch (err: any) {
-      Alert.alert('Submit Failed', err.message ?? 'Unknown error');
+      // Handle 409 Conflict (duplicate from server side)
+      if (err.status === 409) {
+        showBanner('warning', 'Duplicate household detected by server. Submission blocked.');
+      } else {
+        showBanner('error', err.message ?? 'Unknown error. Please retry.');
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  function resetForm() {
+  function resetForm(keepBanner = false) {
     setAddressText('');
     setLandmark('');
     setHouseType('INDIVIDUAL');
     setUnitId('');
     setPersons([blankPerson()]);
+    setGpsAcquired(false);
+    setLatitude('');
+    setLongitude('');
+    if (!keepBanner) hideBanner();
     getLocation();
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
   const voterCount = persons.filter(p => p.is_voter).length;
 
+  // Banner colors
+  const bannerStyles: Record<Exclude<BannerType, null>, { bg: string; border: string; icon: any; color: string }> = {
+    success: { bg: '#0D2318', border: Colors.success, icon: 'checkmark-circle', color: Colors.success },
+    error:   { bg: '#200D0D', border: Colors.error,   icon: 'close-circle',     color: Colors.error   },
+    warning: { bg: '#1A1400', border: Colors.warning,  icon: 'warning',          color: Colors.warning  },
+    info:    { bg: '#0D1A2A', border: Colors.info,    icon: 'information-circle', color: Colors.info   },
+  };
+
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* Header */}
         <View style={styles.pageHeader}>
@@ -181,6 +248,29 @@ export default function CollectScreen() {
             <Text style={styles.progressChipText}>{persons.length} persons · {voterCount} voters</Text>
           </View>
         </View>
+
+        {/* ── Inline Banner ── */}
+        {banner.type && (
+          <View style={[
+            styles.banner,
+            {
+              backgroundColor: bannerStyles[banner.type].bg,
+              borderColor: bannerStyles[banner.type].border,
+            }
+          ]}>
+            <Ionicons
+              name={bannerStyles[banner.type].icon}
+              size={18}
+              color={bannerStyles[banner.type].color}
+            />
+            <Text style={[styles.bannerText, { color: bannerStyles[banner.type].color }]}>
+              {banner.message}
+            </Text>
+            <Pressable onPress={hideBanner} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={16} color={bannerStyles[banner.type].color} />
+            </Pressable>
+          </View>
+        )}
 
         {/* GPS Card */}
         <View style={[styles.card, gpsAcquired ? styles.cardSuccess : styles.cardNeutral]}>
@@ -379,12 +469,12 @@ export default function CollectScreen() {
         {/* Submit */}
         <View style={styles.submitWrap}>
           <ThemedButton
-            title={`Submit Household`}
+            title={submitting ? 'Submitting…' : 'Submit Household'}
             onPress={handleSubmit}
             loading={submitting}
             fullWidth
             size="lg"
-            icon={<Ionicons name="cloud-upload" size={18} color={Colors.textPrimary} />}
+            icon={!submitting ? <Ionicons name="cloud-upload" size={18} color={Colors.textPrimary} /> : undefined}
             style={Shadows.button}
           />
           <Text style={styles.submitHint}>
@@ -401,6 +491,15 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   container: { paddingBottom: 56 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+  // ── Inline Banner ──────────────────────────────────────────────────────────
+  banner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: Spacing.md, marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.md, borderWidth: 1.5,
+  },
+  bannerText: { flex: 1, fontSize: FontSizes.sm, fontWeight: '600', lineHeight: 18 },
 
   // ── Header ────────────────────────────────────────────────────────────────
   pageHeader: {

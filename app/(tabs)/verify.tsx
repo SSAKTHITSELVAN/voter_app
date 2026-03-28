@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,46 +15,72 @@ import * as Location from 'expo-location';
 import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { householdsApi, verificationApi } from '@/lib/api';
-import { HouseholdBrief, VerificationStatus } from '@/lib/types';
+import { Household, HouseholdBrief, VerificationStatus } from '@/lib/types';
+
+type Step = 'search' | 'pick' | 'verify' | 'done';
 
 export default function VerifyScreen() {
-  // Step 1: find by GPS
-  const [step, setStep] = useState<'search' | 'pick' | 'verify' | 'done'>('search');
+  const scrollRef = useRef<ScrollView>(null);
+
+  const [step, setStep] = useState<Step>('search');
   const [gpsLoading, setGpsLoading] = useState(false);
   const [nearbyHouseholds, setNearbyHouseholds] = useState<HouseholdBrief[]>([]);
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdBrief | null>(null);
 
-  // Step 2: verify
+  // Full household detail (persons + images) — fetched when a household is picked
+  const [householdDetail, setHouseholdDetail] = useState<Household | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const [verifyStatus, setVerifyStatus] = useState<VerificationStatus>('MATCHED');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [errorMsg, setErrorMsg] = useState('');
+
   async function searchNearby() {
+    setErrorMsg('');
     setGpsLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission required.');
+        setErrorMsg('Location permission is required to find nearby households.');
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const results = await householdsApi.nearby(loc.coords.latitude, loc.coords.longitude, 200, 20);
       setNearbyHouseholds(results);
       setStep('pick');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'Could not get location.');
+      setErrorMsg(err.message ?? 'Could not get location. Please try again.');
     } finally {
       setGpsLoading(false);
     }
   }
 
-  function pickHousehold(h: HouseholdBrief) {
+  async function pickHousehold(h: HouseholdBrief) {
     setSelectedHousehold(h);
+    setHouseholdDetail(null);
+    setErrorMsg('');
     setStep('verify');
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+
+    // Fetch full details (persons, voter counts) in the background
+    setDetailLoading(true);
+    try {
+      const full = await householdsApi.get(h.id);
+      setHouseholdDetail(full);
+    } catch (err: any) {
+      // Non-fatal: the verify form still works, we just won't show person details
+      setErrorMsg('Could not load household details. You can still submit verification.');
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   async function submitVerification() {
     if (!selectedHousehold) return;
+    setErrorMsg('');
     setSubmitting(true);
     try {
       await verificationApi.submit({
@@ -64,8 +89,9 @@ export default function VerifyScreen() {
         notes: notes.trim() || undefined,
       });
       setStep('done');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      Alert.alert('Failed', err.message ?? 'Submission error.');
+      setErrorMsg(err.message ?? 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -75,13 +101,23 @@ export default function VerifyScreen() {
     setStep('search');
     setNearbyHouseholds([]);
     setSelectedHousehold(null);
+    setHouseholdDetail(null);
     setVerifyStatus('MATCHED');
     setNotes('');
+    setErrorMsg('');
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
+
+  const stepIndex = step === 'done' ? 3 : ['search', 'pick', 'verify'].indexOf(step);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
 
         {/* Header */}
         <View style={styles.header}>
@@ -101,9 +137,8 @@ export default function VerifyScreen() {
         {/* Step indicators */}
         <View style={styles.steps}>
           {['Search', 'Select', 'Verify'].map((label, i) => {
-            const stepIdx = ['search', 'pick', 'verify'].indexOf(step);
-            const done = i < stepIdx || step === 'done';
-            const active = i === stepIdx && step !== 'done';
+            const done = i < stepIndex || step === 'done';
+            const active = i === stepIndex && step !== 'done';
             return (
               <React.Fragment key={label}>
                 <View style={styles.stepItem}>
@@ -118,15 +153,34 @@ export default function VerifyScreen() {
                       <Text style={[styles.stepNum, active && styles.stepNumActive]}>{i + 1}</Text>
                     )}
                   </View>
-                  <Text style={[styles.stepLabel, active && styles.stepLabelActive, done && styles.stepLabelDone]}>{label}</Text>
+                  <Text style={[
+                    styles.stepLabel,
+                    active && styles.stepLabelActive,
+                    done && styles.stepLabelDone,
+                  ]}>
+                    {label}
+                  </Text>
                 </View>
-                {i < 2 && <View style={[styles.stepLine, (done || (active && i > 0)) && styles.stepLineDone]} />}
+                {i < 2 && (
+                  <View style={[styles.stepLine, done && styles.stepLineDone]} />
+                )}
               </React.Fragment>
             );
           })}
         </View>
 
-        {/* STEP 1: Search */}
+        {/* Inline error banner */}
+        {!!errorMsg && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={16} color={Colors.error} />
+            <Text style={styles.errorBannerText}>{errorMsg}</Text>
+            <Pressable onPress={() => setErrorMsg('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={14} color={Colors.error} />
+            </Pressable>
+          </View>
+        )}
+
+        {/* ── STEP 1: Search ── */}
         {step === 'search' && (
           <View style={styles.card}>
             <View style={styles.iconBlock}>
@@ -147,7 +201,7 @@ export default function VerifyScreen() {
           </View>
         )}
 
-        {/* STEP 2: Pick */}
+        {/* ── STEP 2: Pick ── */}
         {step === 'pick' && (
           <View style={styles.card}>
             <View style={styles.pickHeader}>
@@ -161,65 +215,109 @@ export default function VerifyScreen() {
               <View style={styles.emptyPick}>
                 <Ionicons name="home-outline" size={36} color={Colors.border} />
                 <Text style={styles.emptyPickText}>No households found within 200m</Text>
-                <ThemedButton title="Search Again" onPress={searchNearby} variant="outline" size="sm" style={{ marginTop: 12 }} />
+                <ThemedButton
+                  title="Search Again"
+                  onPress={searchNearby}
+                  variant="outline"
+                  size="sm"
+                  style={{ marginTop: 12 }}
+                />
               </View>
             ) : (
-              nearbyHouseholds.map(h => (
-                <Pressable
-                  key={h.id}
-                  onPress={() => pickHousehold(h)}
-                  style={({ pressed }) => [styles.pickItem, pressed && { opacity: 0.8 }]}
-                >
-                  <View style={styles.pickLeft}>
-                    <Ionicons
-                      name={h.house_type === 'APARTMENT' ? 'business-outline' : 'home-outline'}
-                      size={18}
-                      color={Colors.primary}
-                    />
-                    <View>
-                      <Text style={styles.pickAddress} numberOfLines={1}>
-                        {h.address_text ?? 'No address'}
-                      </Text>
-                      <Text style={styles.pickDist}>
-                        {h.distance_metres != null
-                          ? `${Math.round(h.distance_metres)}m away`
-                          : h.house_type}
-                      </Text>
+              <>
+                <Text style={styles.pickCount}>
+                  {nearbyHouseholds.length} household{nearbyHouseholds.length !== 1 ? 's' : ''} found nearby
+                </Text>
+                {nearbyHouseholds.map(h => (
+                  <Pressable
+                    key={h.id}
+                    onPress={() => pickHousehold(h)}
+                    style={({ pressed }) => [styles.pickItem, pressed && { opacity: 0.8 }]}
+                  >
+                    <View style={styles.pickLeft}>
+                      <Ionicons
+                        name={h.house_type === 'APARTMENT' ? 'business-outline' : 'home-outline'}
+                        size={18}
+                        color={Colors.primary}
+                      />
+                      <View>
+                        <Text style={styles.pickAddress} numberOfLines={1}>
+                          {h.address_text ?? 'No address'}
+                        </Text>
+                        <Text style={styles.pickDist}>
+                          {h.distance_metres != null
+                            ? `${Math.round(h.distance_metres)}m away · ${h.house_type}`
+                            : h.house_type}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.midGray} />
-                </Pressable>
-              ))
+                    <Ionicons name="chevron-forward" size={16} color={Colors.midGray} />
+                  </Pressable>
+                ))}
+              </>
             )}
           </View>
         )}
 
-        {/* STEP 3: Verify */}
+        {/* ── STEP 3: Verify ── */}
         {step === 'verify' && selectedHousehold && (
           <View style={styles.card}>
             <View style={styles.pickHeader}>
               <Text style={styles.cardTitle}>Submit Verification</Text>
-              <Pressable onPress={() => setStep('pick')}>
+              <Pressable onPress={() => { setErrorMsg(''); setStep('pick'); }}>
                 <Text style={styles.changeBtn}>← Change</Text>
               </Pressable>
             </View>
 
-            {/* Selected household summary */}
+            {/* Selected household address summary */}
             <View style={styles.selectedCard}>
-              <Ionicons name="home" size={16} color={Colors.primary} />
-              <Text style={styles.selectedText} numberOfLines={2}>
-                {selectedHousehold.address_text ?? `${selectedHousehold.latitude.toFixed(5)}, ${selectedHousehold.longitude.toFixed(5)}`}
-              </Text>
+              <Ionicons
+                name={selectedHousehold.house_type === 'APARTMENT' ? 'business' : 'home'}
+                size={16}
+                color={selectedHousehold.house_type === 'APARTMENT' ? Colors.gold : Colors.primary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectedText} numberOfLines={2}>
+                  {selectedHousehold.address_text ??
+                    `${selectedHousehold.latitude.toFixed(5)}, ${selectedHousehold.longitude.toFixed(5)}`}
+                </Text>
+                {selectedHousehold.distance_metres != null && (
+                  <Text style={styles.selectedDist}>
+                    {Math.round(selectedHousehold.distance_metres)}m away · {selectedHousehold.house_type}
+                  </Text>
+                )}
+              </View>
             </View>
 
+            {/* ── Household Data Panel ── */}
+            <Text style={styles.sectionLabel}>RECORDED DATA</Text>
+            {detailLoading ? (
+              <View style={styles.detailLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.detailLoadingText}>Loading household data…</Text>
+              </View>
+            ) : householdDetail ? (
+              <HouseholdDataPanel household={householdDetail} />
+            ) : (
+              /* detail fetch failed silently — show a soft placeholder */
+              <View style={styles.detailUnavailable}>
+                <Ionicons name="information-circle-outline" size={15} color={Colors.textMuted} />
+                <Text style={styles.detailUnavailableText}>Household details unavailable</Text>
+              </View>
+            )}
+
             {/* Status toggle */}
-            <Text style={styles.fieldLabel}>Verification Status</Text>
+            <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>Verification Status</Text>
             <View style={styles.statusRow}>
               <Pressable
                 onPress={() => setVerifyStatus('MATCHED')}
                 style={[styles.statusBtn, verifyStatus === 'MATCHED' && styles.statusBtnMatched]}
               >
-                <Ionicons name="checkmark-circle" size={22} color={verifyStatus === 'MATCHED' ? Colors.success : Colors.midGray} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={verifyStatus === 'MATCHED' ? Colors.success : Colors.midGray}
+                />
                 <Text style={[styles.statusBtnText, verifyStatus === 'MATCHED' && { color: Colors.success }]}>
                   MATCHED
                 </Text>
@@ -229,7 +327,11 @@ export default function VerifyScreen() {
                 onPress={() => setVerifyStatus('MISMATCH')}
                 style={[styles.statusBtn, verifyStatus === 'MISMATCH' && styles.statusBtnMismatch]}
               >
-                <Ionicons name="close-circle" size={22} color={verifyStatus === 'MISMATCH' ? Colors.error : Colors.midGray} />
+                <Ionicons
+                  name="close-circle"
+                  size={22}
+                  color={verifyStatus === 'MISMATCH' ? Colors.error : Colors.midGray}
+                />
                 <Text style={[styles.statusBtnText, verifyStatus === 'MISMATCH' && { color: Colors.error }]}>
                   MISMATCH
                 </Text>
@@ -240,7 +342,7 @@ export default function VerifyScreen() {
             {/* Notes */}
             <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Notes (optional)</Text>
             <TextInput
-              style={[styles.notesInput]}
+              style={styles.notesInput}
               value={notes}
               onChangeText={setNotes}
               placeholder="Any observations, discrepancies…"
@@ -251,7 +353,7 @@ export default function VerifyScreen() {
             />
 
             <ThemedButton
-              title="Submit Verification"
+              title={submitting ? 'Submitting…' : 'Submit Verification'}
               onPress={submitVerification}
               loading={submitting}
               fullWidth
@@ -261,24 +363,71 @@ export default function VerifyScreen() {
           </View>
         )}
 
-        {/* DONE */}
+        {/* ── DONE ── */}
         {step === 'done' && (
           <View style={styles.card}>
             <View style={styles.doneIcon}>
               <Ionicons
                 name={verifyStatus === 'MATCHED' ? 'checkmark-circle' : 'alert-circle'}
-                size={64}
+                size={72}
                 color={verifyStatus === 'MATCHED' ? Colors.success : Colors.error}
               />
             </View>
+
             <Text style={styles.doneTitle}>
               {verifyStatus === 'MATCHED' ? 'Verified as Matched!' : 'Mismatch Recorded'}
             </Text>
             <Text style={styles.doneDesc}>
               {verifyStatus === 'MATCHED'
                 ? 'The household data has been confirmed accurate.'
-                : 'A mismatch has been logged for review.'}
+                : 'A mismatch has been logged for review by an admin.'}
             </Text>
+
+            {/* Summary of what was submitted */}
+            <View style={[
+              styles.doneSummary,
+              {
+                borderColor: verifyStatus === 'MATCHED' ? Colors.success + '44' : Colors.error + '44',
+                backgroundColor: verifyStatus === 'MATCHED' ? '#0D2318' : '#200D0D',
+              }
+            ]}>
+              <View style={styles.doneSummaryRow}>
+                <Text style={styles.doneSummaryLabel}>Household</Text>
+                <Text style={styles.doneSummaryValue} numberOfLines={1}>
+                  {selectedHousehold?.address_text ?? 'No address'}
+                </Text>
+              </View>
+              {householdDetail && (
+                <>
+                  <View style={styles.doneSummaryRow}>
+                    <Text style={styles.doneSummaryLabel}>Persons</Text>
+                    <Text style={styles.doneSummaryValue}>{householdDetail.persons.length}</Text>
+                  </View>
+                  <View style={styles.doneSummaryRow}>
+                    <Text style={styles.doneSummaryLabel}>Voters</Text>
+                    <Text style={styles.doneSummaryValue}>
+                      {householdDetail.persons.filter(p => p.is_voter).length}
+                    </Text>
+                  </View>
+                </>
+              )}
+              <View style={styles.doneSummaryRow}>
+                <Text style={styles.doneSummaryLabel}>Status</Text>
+                <Text style={[
+                  styles.doneSummaryValue,
+                  { color: verifyStatus === 'MATCHED' ? Colors.success : Colors.error }
+                ]}>
+                  {verifyStatus}
+                </Text>
+              </View>
+              {!!notes.trim() && (
+                <View style={styles.doneSummaryRow}>
+                  <Text style={styles.doneSummaryLabel}>Notes</Text>
+                  <Text style={styles.doneSummaryValue} numberOfLines={2}>{notes}</Text>
+                </View>
+              )}
+            </View>
+
             <ThemedButton
               title="Verify Another"
               onPress={reset}
@@ -292,6 +441,293 @@ export default function VerifyScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// ── Household Data Panel ───────────────────────────────────────────────────────
+
+function HouseholdDataPanel({ household }: { household: Household }) {
+  const totalPeople = household.persons.length;
+  const voterCount = household.persons.filter(p => p.is_voter).length;
+  const nonVoterCount = totalPeople - voterCount;
+  const maleCount = household.persons.filter(p => p.gender === 'MALE').length;
+  const femaleCount = household.persons.filter(p => p.gender === 'FEMALE').length;
+  const otherCount = household.persons.filter(p => p.gender === 'OTHER').length;
+
+  return (
+    <View style={panelStyles.container}>
+
+      {/* Landmark */}
+      {!!household.landmark_description && (
+        <View style={panelStyles.landmarkRow}>
+          <Ionicons name="flag-outline" size={12} color={Colors.textMuted} />
+          <Text style={panelStyles.landmarkText} numberOfLines={1}>
+            {household.landmark_description}
+          </Text>
+        </View>
+      )}
+
+      {/* Stat chips */}
+      <View style={panelStyles.statsRow}>
+        <StatChip
+          label="Total"
+          value={totalPeople}
+          icon="people"
+          color={Colors.info}
+        />
+        <StatChip
+          label="Voters"
+          value={voterCount}
+          icon="checkmark-circle"
+          color={Colors.success}
+        />
+        <StatChip
+          label="Non-Voters"
+          value={nonVoterCount}
+          icon="remove-circle"
+          color={Colors.midGray}
+        />
+      </View>
+
+      {/* Gender breakdown — only show if there are persons */}
+      {totalPeople > 0 && (
+        <View style={panelStyles.genderRow}>
+          <GenderPill label="M" count={maleCount} color="#60A5FA" />
+          <GenderPill label="F" count={femaleCount} color="#F472B6" />
+          {otherCount > 0 && <GenderPill label="O" count={otherCount} color={Colors.gold} />}
+        </View>
+      )}
+
+      {/* Person list */}
+      {totalPeople === 0 ? (
+        <View style={panelStyles.noPerson}>
+          <Text style={panelStyles.noPersonText}>No persons recorded for this household.</Text>
+        </View>
+      ) : (
+        <View style={panelStyles.personList}>
+          <Text style={panelStyles.personListTitle}>
+            Persons ({totalPeople})
+          </Text>
+          {household.persons.map((person, idx) => (
+            <View key={person.id ?? idx} style={panelStyles.personRow}>
+              {/* Index badge */}
+              <View style={panelStyles.personBadge}>
+                <Text style={panelStyles.personBadgeText}>{idx + 1}</Text>
+              </View>
+
+              {/* Gender & age */}
+              <View style={{ flex: 1 }}>
+                <Text style={panelStyles.personMeta}>
+                  {person.gender ?? 'Unknown gender'} · Age {person.age ?? '?'}
+                </Text>
+              </View>
+
+              {/* Voter tag */}
+              <View style={[
+                panelStyles.voterTag,
+                { backgroundColor: person.is_voter ? '#16382A' : Colors.darkGray }
+              ]}>
+                <Ionicons
+                  name={person.is_voter ? 'checkmark-circle' : 'close-circle'}
+                  size={12}
+                  color={person.is_voter ? Colors.success : Colors.midGray}
+                />
+                <Text style={[
+                  panelStyles.voterTagText,
+                  { color: person.is_voter ? Colors.success : Colors.midGray }
+                ]}>
+                  {person.is_voter ? 'Voter' : 'Non-voter'}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Recorded on */}
+      <View style={panelStyles.footer}>
+        <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} />
+        <Text style={panelStyles.footerText}>
+          Recorded {new Date(household.created_at).toLocaleString('en-IN', {
+            day: 'numeric', month: 'short', year: 'numeric',
+          })}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function StatChip({ label, value, icon, color }: {
+  label: string; value: number; icon: any; color: string;
+}) {
+  return (
+    <View style={[panelStyles.statChip, { borderColor: color + '33' }]}>
+      <Ionicons name={icon} size={14} color={color} />
+      <Text style={[panelStyles.statValue, { color }]}>{value}</Text>
+      <Text style={panelStyles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function GenderPill({ label, count, color }: { label: string; count: number; color: string }) {
+  return (
+    <View style={[panelStyles.genderPill, { borderColor: color + '44', backgroundColor: color + '15' }]}>
+      <Text style={[panelStyles.genderPillLabel, { color }]}>{label}</Text>
+      <Text style={[panelStyles.genderPillCount, { color }]}>{count}</Text>
+    </View>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const panelStyles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.bgDark,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.md,
+    overflow: 'hidden',
+  },
+  landmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: 2,
+  },
+  landmarkText: {
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  statChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    backgroundColor: Colors.bgCard,
+    gap: 2,
+  },
+  statValue: {
+    fontSize: FontSizes.lg,
+    fontWeight: '800',
+  },
+  statLabel: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  genderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  genderPillLabel: {
+    fontSize: FontSizes.xs,
+    fontWeight: '800',
+  },
+  genderPillCount: {
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+  },
+  personList: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: Spacing.sm,
+  },
+  personListTitle: {
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
+    paddingHorizontal: Spacing.md,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border + '55',
+    gap: 8,
+  },
+  personBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  personBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  personMeta: {
+    fontSize: FontSizes.sm,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  voterTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  voterTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  noPerson: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  noPersonText: {
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  footerText: {
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+});
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
@@ -344,6 +780,16 @@ const styles = StyleSheet.create({
   stepLine: { flex: 1, height: 2, backgroundColor: Colors.border, marginBottom: 16, marginHorizontal: 4 },
   stepLineDone: { backgroundColor: Colors.success },
 
+  // Error banner
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#200D0D', borderRadius: Radius.md,
+    margin: Spacing.md, marginBottom: 0,
+    padding: Spacing.md,
+    borderWidth: 1.5, borderColor: Colors.error + '88',
+  },
+  errorBannerText: { flex: 1, fontSize: FontSizes.sm, color: Colors.error, fontWeight: '500' },
+
   card: {
     backgroundColor: Colors.bgCard, margin: Spacing.md, marginTop: Spacing.lg,
     borderRadius: Radius.lg, padding: Spacing.xl,
@@ -353,8 +799,15 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: FontSizes.xl, fontWeight: '800', color: Colors.textPrimary, marginBottom: 8 },
   cardDesc: { fontSize: FontSizes.sm, color: Colors.textMuted, lineHeight: 20 },
 
-  pickHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+  pickHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: Spacing.md,
+  },
   changeBtn: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '700' },
+  pickCount: {
+    fontSize: FontSizes.xs, color: Colors.textMuted,
+    marginBottom: Spacing.sm, fontWeight: '600',
+  },
   pickItem: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.bgCardRaised, borderRadius: Radius.md,
@@ -369,12 +822,31 @@ const styles = StyleSheet.create({
   emptyPickText: { color: Colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' },
 
   selectedCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
     backgroundColor: Colors.bgCardRaised, borderRadius: Radius.md,
-    padding: Spacing.md, marginBottom: Spacing.lg,
+    padding: Spacing.md, marginBottom: Spacing.md,
     borderWidth: 1.5, borderColor: Colors.borderRed,
   },
-  selectedText: { flex: 1, fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
+  selectedText: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
+  selectedDist: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2 },
+
+  // Detail loading / unavailable
+  sectionLabel: {
+    fontSize: FontSizes.xs, fontWeight: '800', color: Colors.textMuted,
+    letterSpacing: 1, marginBottom: Spacing.sm, textTransform: 'uppercase',
+  },
+  detailLoading: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.bgDark, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, marginBottom: Spacing.md,
+  },
+  detailLoadingText: { fontSize: FontSizes.xs, color: Colors.textMuted },
+  detailUnavailable: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    padding: Spacing.sm, marginBottom: Spacing.md,
+  },
+  detailUnavailableText: { fontSize: FontSizes.xs, color: Colors.textMuted },
 
   fieldLabel: { fontSize: FontSizes.xs, fontWeight: '700', color: Colors.textMuted, marginBottom: 8, letterSpacing: 0.4 },
   statusRow: { flexDirection: 'row', gap: Spacing.sm },
@@ -396,7 +868,18 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top', minHeight: 88,
   },
 
+  // Done screen
   doneIcon: { alignItems: 'center', marginBottom: Spacing.lg },
-  doneTitle: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
+  doneTitle: {
+    fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary,
+    textAlign: 'center', marginBottom: 8,
+  },
   doneDesc: { fontSize: FontSizes.sm, color: Colors.textMuted, textAlign: 'center', lineHeight: 22 },
+  doneSummary: {
+    width: '100%', borderRadius: Radius.md, padding: Spacing.md,
+    borderWidth: 1, marginTop: Spacing.lg, gap: 8,
+  },
+  doneSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  doneSummaryLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, fontWeight: '600', minWidth: 70 },
+  doneSummaryValue: { flex: 1, fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '700', textAlign: 'right' },
 });

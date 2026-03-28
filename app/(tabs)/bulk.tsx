@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -24,7 +24,7 @@ interface DraftPerson {
 }
 
 interface DraftHousehold {
-  id: string; // local temp ID
+  id: string;
   latitude: string;
   longitude: string;
   address_text: string;
@@ -54,18 +54,23 @@ type ResultState = {
 } | null;
 
 export default function BulkScreen() {
+  const scrollRef = useRef<ScrollView>(null);
   const [drafts, setDrafts] = useState<DraftHousehold[]>([newDraft()]);
   const [gpsLoading, setGpsLoading] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
 
+  // Inline error banner
+  const [errorMsg, setErrorMsg] = useState('');
+
   // ── GPS per draft ──────────────────────────────────────────────────────────
   async function getGpsForDraft(id: string) {
     setGpsLoading(id);
+    setErrorMsg('');
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission required.');
+        setErrorMsg('Location permission required to get GPS coordinates.');
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -75,7 +80,7 @@ export default function BulkScreen() {
         gpsAcquired: true,
       });
     } catch {
-      Alert.alert('GPS Error', 'Could not acquire location.');
+      setErrorMsg('Could not acquire GPS. Please try again or enter coordinates manually.');
     } finally {
       setGpsLoading(null);
     }
@@ -119,11 +124,14 @@ export default function BulkScreen() {
   }
 
   async function handleSubmit() {
-    // Validate
+    setErrorMsg('');
+
+    // Validate — find first missing GPS
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
       if (!d.latitude || !d.longitude) {
-        Alert.alert('Missing GPS', `Household #${i + 1} is missing GPS coordinates.`);
+        setErrorMsg(`Household #${i + 1} is missing GPS coordinates. Tap "Get GPS" on that card.`);
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
     }
@@ -146,17 +154,24 @@ export default function BulkScreen() {
 
       const res = await householdsApi.bulk(payload);
       setResult(res);
+      // Only reset drafts if at least one was created
       if (res.created > 0) {
-        setDrafts([newDraft()]); // reset after success
+        setDrafts([newDraft()]);
       }
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      Alert.alert('Upload Failed', err.message ?? 'Unknown error');
+      setErrorMsg(err.message ?? 'Upload failed. Please check your connection and try again.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSubmitting(false);
     }
   }
 
+  // ── Result Screen ──────────────────────────────────────────────────────────
   if (result) {
+    const allGood = result.errors.length === 0;
+    const hasSkipped = result.duplicates_skipped > 0;
+
     return (
       <View style={styles.flex}>
         <View style={styles.header}>
@@ -169,25 +184,55 @@ export default function BulkScreen() {
             <Text style={styles.title}>Bulk Upload</Text>
           </View>
         </View>
+
         <ScrollView contentContainerStyle={styles.resultContainer}>
           <View style={styles.resultCard}>
             <Ionicons
-              name={result.errors.length === 0 ? 'cloud-upload' : 'alert-circle'}
-              size={56}
-              color={result.errors.length === 0 ? Colors.success : Colors.warning}
+              name={allGood ? 'cloud-done' : 'alert-circle'}
+              size={64}
+              color={allGood ? Colors.success : Colors.warning}
             />
             <Text style={styles.resultTitle}>Upload Complete</Text>
 
             <View style={styles.resultGrid}>
-              <ResultStat label="Total" value={result.total} color={Colors.info} />
-              <ResultStat label="Created" value={result.created} color={Colors.success} />
-              <ResultStat label="Skipped" value={result.duplicates_skipped} color={Colors.warning} />
-              <ResultStat label="Errors" value={result.errors.length} color={Colors.error} />
+              <ResultStat label="Total Sent"    value={result.total}                 color={Colors.info}    />
+              <ResultStat label="Created"       value={result.created}               color={Colors.success} />
+              <ResultStat label="Duplicates"    value={result.duplicates_skipped}    color={Colors.warning} />
+              <ResultStat label="Errors"        value={result.errors.length}         color={Colors.error}   />
             </View>
 
+            {/* Informational messages */}
+            {result.created > 0 && (
+              <View style={styles.resultMsg}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                <Text style={[styles.resultMsgText, { color: Colors.success }]}>
+                  {result.created} household{result.created !== 1 ? 's' : ''} recorded successfully.
+                </Text>
+              </View>
+            )}
+            {hasSkipped && (
+              <View style={styles.resultMsg}>
+                <Ionicons name="copy-outline" size={16} color={Colors.warning} />
+                <Text style={[styles.resultMsgText, { color: Colors.warning }]}>
+                  {result.duplicates_skipped} skipped — already exist within 20m of an existing household.
+                </Text>
+              </View>
+            )}
+            {result.created === 0 && result.errors.length === 0 && (
+              <View style={styles.resultMsg}>
+                <Ionicons name="information-circle" size={16} color={Colors.info} />
+                <Text style={[styles.resultMsgText, { color: Colors.info }]}>
+                  All submitted households were duplicates. No new records were created.
+                </Text>
+              </View>
+            )}
+
+            {/* Error list */}
             {result.errors.length > 0 && (
               <View style={styles.errorList}>
-                <Text style={styles.errorTitle}>Errors:</Text>
+                <Text style={styles.errorTitle}>
+                  ⚠️ {result.errors.length} Error{result.errors.length !== 1 ? 's' : ''}
+                </Text>
                 {result.errors.map(e => (
                   <View key={e.index} style={styles.errorItem}>
                     <Text style={styles.errorIdx}>#{e.index + 1}</Text>
@@ -200,7 +245,8 @@ export default function BulkScreen() {
             <ThemedButton
               title="Upload More"
               onPress={() => { setResult(null); setDrafts([newDraft()]); }}
-              fullWidth size="lg"
+              fullWidth
+              size="lg"
               style={{ marginTop: Spacing.xl }}
             />
           </View>
@@ -209,6 +255,7 @@ export default function BulkScreen() {
     );
   }
 
+  // ── Main Form ──────────────────────────────────────────────────────────────
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
@@ -226,7 +273,22 @@ export default function BulkScreen() {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
+
+          {/* ── Inline error banner ── */}
+          {!!errorMsg && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={16} color={Colors.error} />
+              <Text style={styles.errorBannerText}>{errorMsg}</Text>
+              <Pressable onPress={() => setErrorMsg('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={14} color={Colors.error} />
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.infoBar}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.info} />
@@ -262,7 +324,7 @@ export default function BulkScreen() {
                     {parseFloat(draft.latitude).toFixed(5)}, {parseFloat(draft.longitude).toFixed(5)}
                   </Text>
                 ) : (
-                  <Text style={styles.gpsEmpty}>No location</Text>
+                  <Text style={styles.gpsEmpty}>No location set</Text>
                 )}
                 <Pressable
                   onPress={() => getGpsForDraft(draft.id)}
@@ -302,7 +364,9 @@ export default function BulkScreen() {
               {/* Persons */}
               <View style={styles.personsSection}>
                 <View style={styles.personsTop}>
-                  <Text style={styles.personsLabel}>Persons ({draft.persons.length})</Text>
+                  <Text style={styles.personsLabel}>
+                    Persons ({draft.persons.length}) · {draft.persons.filter(p => p.is_voter).length} voter{draft.persons.filter(p => p.is_voter).length !== 1 ? 's' : ''}
+                  </Text>
                   <Pressable onPress={() => addPerson(draft.id)} style={styles.addPersonBtn}>
                     <Ionicons name="add" size={14} color={Colors.primary} />
                     <Text style={styles.addPersonText}>Add</Text>
@@ -319,7 +383,7 @@ export default function BulkScreen() {
                       keyboardType="numeric"
                       maxLength={3}
                     />
-                    {(['M', 'F', 'O'] as const).map((g, gi) => {
+                    {(['M', 'F', 'O'] as const).map(g => {
                       const full: GenderType = g === 'M' ? 'MALE' : g === 'F' ? 'FEMALE' : 'OTHER';
                       return (
                         <Pressable
@@ -366,7 +430,8 @@ export default function BulkScreen() {
             title={submitting ? 'Uploading…' : `Upload ${drafts.length} Household${drafts.length !== 1 ? 's' : ''}`}
             onPress={handleSubmit}
             loading={submitting}
-            fullWidth size="lg"
+            fullWidth
+            size="lg"
             style={{ marginTop: Spacing.sm }}
           />
         </ScrollView>
@@ -410,6 +475,15 @@ const styles = StyleSheet.create({
   title: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
   subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
   container: { padding: Spacing.md, paddingBottom: 56 },
+
+  // Inline error banner
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#200D0D', borderRadius: Radius.md,
+    padding: Spacing.md, marginBottom: Spacing.sm,
+    borderWidth: 1.5, borderColor: Colors.error + '88',
+  },
+  errorBannerText: { flex: 1, fontSize: FontSizes.sm, color: Colors.error, fontWeight: '500' },
 
   infoBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -479,11 +553,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.primary,
   },
   addPersonText: { fontSize: FontSizes.xs, color: Colors.primary, fontWeight: '600' },
-
-  personRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginBottom: 6,
-  },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   ageInput: {
     width: 48, height: 34,
     backgroundColor: Colors.darkGray, borderRadius: Radius.sm,
@@ -517,7 +587,7 @@ const styles = StyleSheet.create({
   },
   addDraftText: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '600' },
 
-  // Result
+  // Result screen
   resultContainer: { padding: Spacing.md, paddingBottom: 48 },
   resultCard: {
     backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
@@ -530,7 +600,7 @@ const styles = StyleSheet.create({
   },
   resultGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 10,
-    justifyContent: 'center', marginBottom: Spacing.lg, width: '100%',
+    justifyContent: 'center', marginBottom: Spacing.md, width: '100%',
   },
   resultStat: {
     width: '44%', backgroundColor: Colors.darkGray,
@@ -540,10 +610,17 @@ const styles = StyleSheet.create({
   resultStatValue: { fontSize: FontSizes.xxl, fontWeight: '800' },
   resultStatLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 4 },
 
+  resultMsg: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    width: '100%', marginBottom: 6,
+  },
+  resultMsgText: { flex: 1, fontSize: FontSizes.sm, fontWeight: '500', lineHeight: 18 },
+
   errorList: {
     width: '100%', backgroundColor: '#200D0D',
     borderRadius: Radius.md, padding: Spacing.md,
     borderWidth: 1, borderColor: Colors.error + '44',
+    marginTop: Spacing.sm,
   },
   errorTitle: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.error, marginBottom: 8 },
   errorItem: { flexDirection: 'row', gap: 8, marginBottom: 4 },
