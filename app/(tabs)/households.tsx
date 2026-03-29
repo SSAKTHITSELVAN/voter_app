@@ -234,7 +234,7 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.personInfo}>
-                {item.gender ?? 'Unknown'} · Age {item.age ?? '?'}
+                {item.name?.trim() ? item.name.trim() : ''}{item.name?.trim() ? ' | ' : ''}{item.gender ?? 'Unknown'} | Age {item.age ?? '?'}
               </Text>
             </View>
             <View style={[styles.voterTag, { backgroundColor: item.is_voter ? '#16382A' : Colors.darkGray }]}>
@@ -455,4 +455,7 @@ const styles = StyleSheet.create({
   voterTagText: { fontSize: FontSizes.xs, fontWeight: '600' },
   noPerson: { textAlign: 'center', color: Colors.textMuted, padding: Spacing.xl },
 });
+
+
+
 

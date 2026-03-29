@@ -3,14 +3,15 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { householdsApi } from '@/lib/api';
 import { CollectionRecord } from '@/lib/types';
@@ -43,10 +44,65 @@ function getAddress(record: CollectionRecord): string {
   return 'Address unavailable';
 }
 
+function getPersonSummary(record: CollectionRecord): string {
+  const raw = record.raw_data_json;
+  if (!raw || typeof raw !== 'object') return '';
+  const persons = (raw as Record<string, unknown>).persons;
+  if (!Array.isArray(persons)) return '';
+
+  const summary = persons
+    .filter((person): person is Record<string, unknown> => typeof person === 'object' && person !== null)
+    .map((person) => {
+      const rawName = person.name;
+      const name = typeof rawName === 'string' ? rawName.trim() : '';
+      const age = person.age;
+      if (name && age !== null && age !== undefined && age !== '') {
+        return `${name} (Age ${age})`;
+      }
+      if (name) {
+        return name;
+      }
+      if (age !== null && age !== undefined && age !== '') {
+        return `Age ${age}`;
+      }
+      return '';
+    })
+    .filter(Boolean);
+
+  return summary.join('; ');
+}
+
+async function saveCsvFile(csvText: string, fileName: string): Promise<string> {
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return fileName;
+  }
+
+  const baseDirectory = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
+  if (!baseDirectory) {
+    throw new Error('No writable export directory is available on this device.');
+  }
+
+  const fileUri = `${baseDirectory}${fileName}`;
+  await FileSystem.writeAsStringAsync(fileUri, csvText, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  return fileUri;
+}
+
 export function CollectionRecordsPanel({ active }: CollectionRecordsPanelProps) {
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const [exportingRecordId, setExportingRecordId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
 
@@ -80,21 +136,48 @@ export function CollectionRecordsPanel({ active }: CollectionRecordsPanelProps) 
     };
   }, [records]);
 
-  async function handleExport() {
-    setExporting(true);
+  async function exportCsv(params: {
+    fileName: string;
+    search?: string;
+    record_id?: string;
+    limit?: number;
+  }) {
+    const csvText = await householdsApi.exportCollectionRecordsCsv({
+      search: params.search,
+      record_id: params.record_id,
+      limit: params.limit,
+    });
+    const savedPath = await saveCsvFile(csvText, params.fileName);
+    Alert.alert('CSV exported', `Saved to ${savedPath}`);
+  }
+
+  async function handleBulkExport() {
+    setBulkExporting(true);
     try {
-      const csvText = await householdsApi.exportCollectionRecordsCsv({
+      await exportCsv({
+        fileName: `collection-records-${Date.now()}.csv`,
         search: appliedSearch || undefined,
         limit: 5000,
-      });
-      await Share.share({
-        title: 'Collection Records CSV',
-        message: csvText,
       });
     } catch (err: any) {
       Alert.alert('Export failed', err.message ?? 'Could not export collected data.');
     } finally {
-      setExporting(false);
+      setBulkExporting(false);
+    }
+  }
+
+  async function handleSingleExport(record: CollectionRecord) {
+    setExportingRecordId(record.id);
+    try {
+      await exportCsv({
+        fileName: `collection-record-${record.id}.csv`,
+        record_id: record.id,
+        limit: 1,
+      });
+    } catch (err: any) {
+      Alert.alert('Export failed', err.message ?? 'Could not export this collected record.');
+    } finally {
+      setExportingRecordId(null);
     }
   }
 
@@ -150,9 +233,9 @@ export function CollectionRecordsPanel({ active }: CollectionRecordsPanelProps) 
 
             <View style={styles.actionRow}>
               <ThemedButton
-                title={exporting ? 'Exporting...' : 'Export CSV'}
-                onPress={() => void handleExport()}
-                loading={exporting}
+                title={bulkExporting ? 'Exporting...' : 'Export All CSV'}
+                onPress={() => void handleBulkExport()}
+                loading={bulkExporting}
                 size="sm"
               />
               <Pressable onPress={clearSearch} style={styles.clearBtn}>
@@ -182,6 +265,8 @@ export function CollectionRecordsPanel({ active }: CollectionRecordsPanelProps) 
       }
       renderItem={({ item }) => {
         const landmarkImageCount = getLandmarkImageCount(item);
+        const personSummary = getPersonSummary(item);
+        const exportingThisRecord = exportingRecordId === item.id;
         return (
           <View style={styles.recordCard}>
             <View style={styles.recordTopRow}>
@@ -200,6 +285,11 @@ export function CollectionRecordsPanel({ active }: CollectionRecordsPanelProps) 
             <View style={styles.metaRow}>
               <Ionicons name="layers-outline" size={14} color={Colors.gold} />
               <Text style={styles.metaText}>{item.household_house_type ?? 'Unknown house type'}</Text>
+            </View>
+
+            <View style={styles.metaRowTop}>
+              <Ionicons name="people-outline" size={14} color={Colors.info} />
+              <Text style={styles.metaText}>{personSummary || 'No person names recorded'}</Text>
             </View>
 
             <View style={styles.metricsRow}>
@@ -224,6 +314,15 @@ export function CollectionRecordsPanel({ active }: CollectionRecordsPanelProps) 
               <Text style={styles.recordIdText} numberOfLines={1}>
                 {item.id}
               </Text>
+            </View>
+
+            <View style={styles.cardActionRow}>
+              <ThemedButton
+                title={exportingThisRecord ? 'Exporting...' : 'Export CSV'}
+                onPress={() => void handleSingleExport(item)}
+                loading={exportingThisRecord}
+                size="sm"
+              />
             </View>
           </View>
         );
@@ -396,10 +495,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  metaRowTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   metaText: {
     flex: 1,
     color: Colors.textPrimary,
     fontSize: FontSizes.sm,
+    lineHeight: 19,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -441,6 +546,10 @@ const styles = StyleSheet.create({
     color: Colors.midGray,
     fontSize: 10,
   },
+  cardActionRow: {
+    alignItems: 'flex-start',
+    marginTop: 2,
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -458,5 +567,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
 

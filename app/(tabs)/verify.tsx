@@ -235,7 +235,7 @@ export default function VerifyScreen() {
                           </Text>
                           <Text style={styles.pickDist}>
                             {household.distance_metres != null
-                              ? `${Math.round(household.distance_metres)}m away Â· ${household.house_type}`
+                              ? `${Math.round(household.distance_metres)}m away Ã‚Â· ${household.house_type}`
                               : household.house_type}
                           </Text>
                           {imageCount > 0 ? (
@@ -282,7 +282,7 @@ export default function VerifyScreen() {
                 </Text>
                 {selectedHousehold.distance_metres != null ? (
                   <Text style={styles.selectedDist}>
-                    {Math.round(selectedHousehold.distance_metres)}m away Â· {selectedHousehold.house_type}
+                    {Math.round(selectedHousehold.distance_metres)}m away Ã‚Â· {selectedHousehold.house_type}
                   </Text>
                 ) : null}
                 {selectedImageCount > 0 ? (
@@ -496,7 +496,7 @@ function HouseholdDataPanel({ household }: { household: Household }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={panelStyles.personMeta}>
-                  {person.gender ?? 'Unknown gender'} Â· Age {person.age ?? '?'}
+                  {person.name?.trim() ? person.name.trim() : ''}{person.name?.trim() ? ' | ' : ''}{person.gender ?? 'Unknown gender'} | Age {person.age ?? '?'}
                 </Text>
               </View>
               <View
@@ -861,6 +861,9 @@ selectedText: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '
   doneSummaryLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, fontWeight: '600', minWidth: 90 },
   doneSummaryValue: { flex: 1, fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '700', textAlign: 'right' },
 });
+
+
+
 
 
 

@@ -288,6 +288,7 @@ export const householdsApi = {
     search?: string;
     collector_id?: string;
     household_id?: string;
+    record_id?: string;
   }) =>
     request<CollectionRecord[]>(
       'GET',
@@ -299,6 +300,7 @@ export const householdsApi = {
     search?: string;
     collector_id?: string;
     household_id?: string;
+    record_id?: string;
     limit?: number;
   }) =>
     requestText('GET', '/households/collection-records/export', params),
@@ -313,3 +315,6 @@ export const verificationApi = {
   submit: (data: VerificationCreate) =>
     request<VerificationRecord>('POST', '/verification', data),
 };
+
+
+

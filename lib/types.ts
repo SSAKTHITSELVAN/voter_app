@@ -12,6 +12,7 @@ export interface AuthUser {
 
 export interface Person {
   id?: string;
+  name?: string | null;
   age: number | null;
   gender: GenderType | null;
   is_voter: boolean;
@@ -137,3 +138,5 @@ export interface CollectionRecord {
   raw_data_json: Record<string, unknown> | null;
   created_at: string;
 }
+
+

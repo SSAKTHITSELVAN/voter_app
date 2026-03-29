@@ -28,6 +28,7 @@ const MAX_LANDMARK_IMAGES = 5;
 type BannerType = 'success' | 'error' | 'warning' | 'info' | null;
 
 interface PersonForm {
+  name: string;
   age: string;
   gender: GenderType | null;
   is_voter: boolean;
@@ -39,7 +40,7 @@ interface Banner {
 }
 
 function blankPerson(): PersonForm {
-  return { age: '', gender: null, is_voter: false };
+  return { name: '', age: '', gender: null, is_voter: false };
 }
 
 function createUploadableImage(asset: ImagePicker.ImagePickerAsset): UploadableImage {
@@ -282,6 +283,7 @@ export default function CollectScreen() {
           house_type: houseType,
           unit_id: houseType === 'APARTMENT' ? unitId.trim() : undefined,
           persons: persons.map((person) => ({
+            name: person.name.trim() || null,
             age: person.age ? Number.parseInt(person.age, 10) : null,
             gender: person.gender,
             is_voter: person.is_voter,
@@ -351,7 +353,7 @@ export default function CollectScreen() {
           <View style={styles.progressChip}>
             <Ionicons name="images" size={12} color={Colors.gold} />
             <Text style={styles.progressChipText}>
-              {landmarkImages.length}/{MAX_LANDMARK_IMAGES} images Ã‚Â· {persons.length} persons
+              {landmarkImages.length}/{MAX_LANDMARK_IMAGES} images Ãƒâ€šÃ‚Â· {persons.length} persons
             </Text>
           </View>
         </View>
@@ -526,7 +528,7 @@ export default function CollectScreen() {
             <View>
               <Text style={styles.sectionLabel}>Persons</Text>
               <Text style={styles.personsCount}>
-                {persons.length} person{persons.length !== 1 ? 's' : ''} Ã‚Â· {voterCount} voter{voterCount !== 1 ? 's' : ''}
+                {persons.length} person{persons.length !== 1 ? 's' : ''} Ãƒâ€šÃ‚Â· {voterCount} voter{voterCount !== 1 ? 's' : ''}
               </Text>
             </View>
             <Pressable onPress={addPerson} style={styles.addPersonBtn}>
@@ -547,6 +549,18 @@ export default function CollectScreen() {
                     <Ionicons name="close-circle" size={20} color={Colors.error} />
                   </Pressable>
                 )}
+              </View>
+
+              <View style={[styles.fieldGroup, { marginBottom: Spacing.sm }]}>
+                <Text style={styles.fieldLabel}>Name (optional)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={person.name}
+                  onChangeText={(value) => updatePerson(idx, 'name', value)}
+                  placeholder="Enter person name"
+                  placeholderTextColor={Colors.midGray}
+                  maxLength={120}
+                />
               </View>
 
               <View style={styles.personRow}>
@@ -607,7 +621,7 @@ export default function CollectScreen() {
             style={Shadows.button}
           />
           <Text style={styles.submitHint}>
-            {landmarkImages.length} image{landmarkImages.length !== 1 ? 's' : ''} Ã‚Â· {voterCount} voter{voterCount !== 1 ? 's' : ''} in {persons.length} person{persons.length !== 1 ? 's' : ''}
+            {landmarkImages.length} image{landmarkImages.length !== 1 ? 's' : ''} Ãƒâ€šÃ‚Â· {voterCount} voter{voterCount !== 1 ? 's' : ''} in {persons.length} person{persons.length !== 1 ? 's' : ''}
           </Text>
         </View>
       </ScrollView>
@@ -873,3 +887,4 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
 });
+
