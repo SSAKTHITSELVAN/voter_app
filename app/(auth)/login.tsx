@@ -47,7 +47,7 @@ export default function LoginScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [cardOpacity, cardSlide]);
 
   async function handleLogin() {
     if (!phone.trim() || !password.trim()) {

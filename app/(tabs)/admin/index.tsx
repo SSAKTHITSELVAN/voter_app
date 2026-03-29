@@ -16,18 +16,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
+import { CollectionRecordsPanel } from '@/components/CollectionRecordsPanel';
 import { StatusBadge } from '@/components/StatusBadge';
 import { usersApi } from '@/lib/api';
 import { AuthStore } from '@/lib/auth';
 import { User, UserRole } from '@/lib/types';
 
-type Tab = 'users' | 'create';
+type Tab = 'users' | 'create' | 'records';
 
 const CREATABLE_ROLES: Record<string, UserRole[]> = {
   SUPER_ADMIN: ['ADMIN'],
   ADMIN: ['FIELD_USER'],
   FIELD_USER: [],
 };
+
+const ADMIN_TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: 'users', label: 'User List', icon: 'people-outline' },
+  { key: 'create', label: 'Create User', icon: 'person-add-outline' },
+  { key: 'records', label: 'Collected', icon: 'document-text-outline' },
+];
 
 export default function AdminScreen() {
   const [tab, setTab] = useState<Tab>('users');
@@ -44,7 +51,6 @@ export default function AdminScreen() {
 
   return (
     <View style={styles.flex}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerDecorLeft} />
         <View style={styles.headerDecorRight} />
@@ -55,38 +61,42 @@ export default function AdminScreen() {
           <View>
             <Text style={styles.title}>Admin Panel</Text>
             <Text style={styles.subtitle}>
-              {role === 'SUPER_ADMIN' ? 'Manage Admins' : 'Manage Field Users'}
+              {tab === 'records'
+                ? 'Collected data, export, and audit view'
+                : role === 'SUPER_ADMIN'
+                  ? 'Manage Admins'
+                  : 'Manage Field Users'}
             </Text>
           </View>
         </View>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabBar}>
-        {(['users', 'create'] as Tab[]).map(t => (
+        {ADMIN_TABS.map((item) => (
           <Pressable
-            key={t}
-            onPress={() => setTab(t)}
-            style={[styles.tabBtn, tab === t && styles.tabBtnActive]}
+            key={item.key}
+            onPress={() => setTab(item.key)}
+            style={[styles.tabBtn, tab === item.key && styles.tabBtnActive]}
           >
             <Ionicons
-              name={t === 'users' ? 'people-outline' : 'person-add-outline'}
+              name={item.icon as any}
               size={16}
-              color={tab === t ? Colors.primary : Colors.midGray}
+              color={tab === item.key ? Colors.primary : Colors.midGray}
             />
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'users' ? 'User List' : 'Create User'}
+            <Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>
+              {item.label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      {tab === 'users' ? <UserList role={role!} /> : <CreateUser role={role!} onCreated={() => setTab('users')} />}
+      {tab === 'users' ? <UserList role={role!} /> : null}
+      {tab === 'create' ? <CreateUser role={role!} onCreated={() => setTab('users')} /> : null}
+      {tab === 'records' ? <CollectionRecordsPanel active /> : null}
     </View>
   );
 }
 
-// ── User List ─────────────────────────────────────────────────────────────────
 function UserList({ role }: { role: string }) {
   const [users, setUsers] = useState<User[]>([]);
   const [total, setTotal] = useState(0);
@@ -425,3 +435,5 @@ const styles = StyleSheet.create({
   roleBtnText: { fontSize: FontSizes.sm, fontWeight: '700', color: Colors.midGray },
   roleBtnTextActive: { color: Colors.textPrimary },
 });
+
+

@@ -11,10 +11,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { HouseholdCard } from '@/components/HouseholdCard';
+import { LandmarkImageGallery } from '@/components/LandmarkImageGallery';
 import { ThemedButton } from '@/components/ThemedButton';
-import { householdsApi } from '@/lib/api';
+import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { householdsApi, resolveApiUrl } from '@/lib/api';
 import { Household, HouseholdBrief } from '@/lib/types';
 
 const RADII = [100, 250, 500, 1000, 5000];
@@ -28,42 +29,44 @@ export default function HouseholdsScreen() {
   const [selected, setSelected] = useState<Household | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchNearby();
-    }, [radius])
-  );
-
-  async function fetchNearby() {
+  const fetchNearby = useCallback(async () => {
     setLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location needed to find nearby households.');
-        setLoading(false);
+        Alert.alert('Permission denied', 'Location is needed to find nearby households.');
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const lat = loc.coords.latitude;
-      const lon = loc.coords.longitude;
-      setMyLat(lat);
-      setMyLon(lon);
-      const results = await householdsApi.nearby(lat, lon, radius, 100);
+      setMyLat(loc.coords.latitude);
+      setMyLon(loc.coords.longitude);
+      const results = await householdsApi.nearby(
+        loc.coords.latitude,
+        loc.coords.longitude,
+        radius,
+        100,
+      );
       setHouseholds(results);
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Could not load households.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [radius]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchNearby();
+    }, [fetchNearby]),
+  );
 
   async function openHousehold(id: string) {
     setDetailLoading(true);
     try {
-      const h = await householdsApi.get(id);
-      setSelected(h);
+      const household = await householdsApi.get(id);
+      setSelected(household);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      Alert.alert('Error', err.message ?? 'Could not load household details.');
     } finally {
       setDetailLoading(false);
     }
@@ -75,7 +78,6 @@ export default function HouseholdsScreen() {
 
   return (
     <View style={styles.flex}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerDecorLeft} />
         <View style={styles.headerDecorRight} />
@@ -85,61 +87,58 @@ export default function HouseholdsScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Nearby Households</Text>
-            {myLat !== null && (
-              <Text style={styles.subtitle}>
-                {myLat.toFixed(4)}, {myLon?.toFixed(4)}
-              </Text>
-            )}
+            {myLat !== null ? (
+              <Text style={styles.subtitle}>{myLat.toFixed(4)}, {myLon?.toFixed(4)}</Text>
+            ) : null}
           </View>
-          <Pressable onPress={fetchNearby} style={styles.refreshHeaderBtn} disabled={loading}>
+          <Pressable onPress={() => void fetchNearby()} style={styles.refreshHeaderBtn} disabled={loading}>
             <Ionicons name="refresh" size={20} color={loading ? Colors.white20 : Colors.textPrimary} />
           </Pressable>
         </View>
       </View>
 
-      {/* Radius filter */}
       <View style={styles.radiusRow}>
         <Text style={styles.radiusLabel}>Radius:</Text>
-        {RADII.map(r => (
+        {RADII.map((value) => (
           <Pressable
-            key={r}
-            onPress={() => setRadius(r)}
-            style={[styles.radiusBtn, radius === r && styles.radiusBtnActive]}
+            key={value}
+            onPress={() => setRadius(value)}
+            style={[styles.radiusBtn, radius === value && styles.radiusBtnActive]}
           >
-            <Text style={[styles.radiusBtnText, radius === r && styles.radiusBtnTextActive]}>
-              {r >= 1000 ? `${r / 1000}km` : `${r}m`}
+            <Text style={[styles.radiusBtnText, radius === value && styles.radiusBtnTextActive]}>
+              {value >= 1000 ? `${value / 1000}km` : `${value}m`}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      {/* List */}
-      {loading ? (
+      {loading || detailLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={styles.loadingText}>Finding households…</Text>
+          <Text style={styles.loadingText}>Finding households...</Text>
         </View>
       ) : (
         <FlatList
           data={households}
-          keyExtractor={h => h.id}
+          keyExtractor={(household) => household.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <HouseholdCard
-              household={item}
-              onPress={() => openHousehold(item.id)}
-            />
+            <HouseholdCard household={item} onPress={() => void openHousehold(item.id)} />
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="home-outline" size={48} color={Colors.border} />
-              <Text style={styles.emptyText}>No households found within {radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}</Text>
-              <ThemedButton title="Refresh" onPress={fetchNearby} variant="outline" size="sm" style={{ marginTop: 16 }} />
+              <Text style={styles.emptyText}>
+                No households found within {radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}
+              </Text>
+              <ThemedButton title="Refresh" onPress={() => void fetchNearby()} variant="outline" size="sm" style={{ marginTop: 16 }} />
             </View>
           }
           ListHeaderComponent={
             households.length > 0 ? (
-              <Text style={styles.countText}>{households.length} household{households.length !== 1 ? 's' : ''} found</Text>
+              <Text style={styles.countText}>
+                {households.length} household{households.length !== 1 ? 's' : ''} found
+              </Text>
             ) : null
           }
         />
@@ -149,7 +148,11 @@ export default function HouseholdsScreen() {
 }
 
 function HouseholdDetail({ household, onBack }: { household: Household; onBack: () => void }) {
-  const voterCount = household.persons.filter(p => p.is_voter).length;
+  const voterCount = household.persons.filter((person) => person.is_voter).length;
+  const galleryImages = household.landmark_images.map((image) => ({
+    id: image.id,
+    uri: resolveApiUrl(image.image_url),
+  }));
 
   return (
     <View style={styles.flex}>
@@ -162,34 +165,59 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
 
       <FlatList
         data={household.persons}
-        keyExtractor={(_, i) => String(i)}
+        keyExtractor={(item, index) => item.id ?? String(index)}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <>
-            {/* Type badge */}
-            <View style={[styles.typeBadge, { borderColor: household.house_type === 'APARTMENT' ? Colors.gold : Colors.primary }]}>
+            <View
+              style={[
+                styles.typeBadge,
+                { borderColor: household.house_type === 'APARTMENT' ? Colors.gold : Colors.primary },
+              ]}
+            >
               <Ionicons
                 name={household.house_type === 'APARTMENT' ? 'business' : 'home'}
                 size={14}
                 color={household.house_type === 'APARTMENT' ? Colors.gold : Colors.primary}
               />
-              <Text style={[styles.typeBadgeText, { color: household.house_type === 'APARTMENT' ? Colors.gold : Colors.primary }]}>
+              <Text
+                style={[
+                  styles.typeBadgeText,
+                  { color: household.house_type === 'APARTMENT' ? Colors.gold : Colors.primary },
+                ]}
+              >
                 {household.house_type}
               </Text>
             </View>
 
-            {/* Address */}
             <View style={styles.detailCard}>
               <Row icon="location-outline" label="Address" value={household.address_text ?? 'N/A'} />
-              <Row icon="flag-outline" label="Landmark" value={household.landmark_description ?? 'N/A'} />
-              <Row icon="navigate-outline" label="Coordinates"
+              <Row
+                icon="navigate-outline"
+                label="Coordinates"
                 value={`${household.latitude.toFixed(6)}, ${household.longitude.toFixed(6)}`}
-                mono />
-              <Row icon="calendar-outline" label="Recorded On"
-                value={new Date(household.created_at).toLocaleString('en-IN')} />
+                mono
+              />
+              <Row
+                icon="calendar-outline"
+                label="Recorded On"
+                value={new Date(household.created_at).toLocaleString('en-IN')}
+              />
             </View>
 
-            {/* Stats */}
+            <View style={styles.gallerySection}>
+              <View style={styles.galleryHeader}>
+                <Text style={styles.galleryTitle}>Landmark Images</Text>
+                <Text style={styles.galleryCount}>
+                  {household.landmark_images.length} image{household.landmark_images.length !== 1 ? 's' : ''}
+                </Text>
+              </View>
+              <LandmarkImageGallery
+                images={galleryImages}
+                emptyText="No landmark images were uploaded for this household."
+              />
+            </View>
+
             <View style={styles.statsRow}>
               <StatMini label="Total People" value={household.persons.length} color={Colors.info} />
               <StatMini label="Voters" value={voterCount} color={Colors.success} />
@@ -227,13 +255,25 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
   );
 }
 
-function Row({ icon, label, value, mono }: { icon: any; label: string; value: string; mono?: boolean }) {
+function Row({
+  icon,
+  label,
+  value,
+  mono,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <View style={styles.rowItem}>
       <Ionicons name={icon} size={15} color={Colors.primary} style={{ marginTop: 2 }} />
       <View style={{ flex: 1 }}>
         <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={[styles.rowValue, mono && { fontFamily: 'monospace', fontSize: FontSizes.xs }]}>{value}</Text>
+        <Text style={[styles.rowValue, mono && { fontFamily: 'monospace', fontSize: FontSizes.xs }]}>
+          {value}
+        </Text>
       </View>
     </View>
   );
@@ -252,117 +292,167 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bgDark },
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 64, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg,
+    paddingTop: 64,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.lg,
     overflow: 'hidden',
   },
   headerDecorLeft: {
-    position: 'absolute', top: -20, left: -20,
-    width: 120, height: 120, borderRadius: 60,
-    backgroundColor: Colors.primaryDark, opacity: 0.5,
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.primaryDark,
+    opacity: 0.5,
   },
   headerDecorRight: {
-    position: 'absolute', bottom: -30, right: -20,
-    width: 160, height: 160, borderRadius: 80,
-    backgroundColor: Colors.primaryDark, opacity: 0.4,
+    position: 'absolute',
+    bottom: -30,
+    right: -20,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: Colors.primaryDark,
+    opacity: 0.4,
   },
   headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   headerIconWrap: {
-    width: 48, height: 48, borderRadius: Radius.md,
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
     backgroundColor: Colors.white10,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   refreshHeaderBtn: {
-    width: 44, height: 44, borderRadius: Radius.md,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
     backgroundColor: Colors.white10,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: FontSizes.xxl, fontWeight: '900', color: Colors.textPrimary },
   subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
-
   radiusRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    backgroundColor: Colors.charcoal, gap: 8,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.charcoal,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   radiusLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, fontWeight: '600' },
   radiusBtn: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   radiusBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   radiusBtnText: { fontSize: FontSizes.xs, color: Colors.midGray, fontWeight: '600' },
   radiusBtnTextActive: { color: Colors.textPrimary },
-
   list: { padding: Spacing.md, paddingBottom: 32 },
-  countText: {
-    fontSize: FontSizes.xs, color: Colors.textMuted,
-    marginBottom: Spacing.sm, fontWeight: '600',
-  },
+  countText: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: Spacing.sm, fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { color: Colors.textMuted, marginTop: Spacing.md, fontSize: FontSizes.sm },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyText: { color: Colors.textMuted, marginTop: Spacing.md, textAlign: 'center', fontSize: FontSizes.sm },
-
-  // Detail
   detailHeader: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.charcoal,
-    paddingTop: 56, paddingBottom: Spacing.md,
-    paddingHorizontal: Spacing.lg, gap: Spacing.md,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    paddingTop: 56,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   backBtn: { padding: 4 },
   detailTitle: { fontSize: FontSizes.lg, fontWeight: '700', color: Colors.textPrimary },
   typeBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'flex-start', marginHorizontal: Spacing.md, marginTop: Spacing.md,
-    paddingHorizontal: 12, paddingVertical: 5,
-    borderRadius: Radius.full, borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
   },
   typeBadgeText: { fontSize: FontSizes.xs, fontWeight: '700' },
   detailCard: {
-    backgroundColor: Colors.bgCard, borderRadius: Radius.md,
-    margin: Spacing.md, marginTop: Spacing.sm,
-    padding: Spacing.md, gap: Spacing.sm,
-    borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    margin: Spacing.md,
+    marginTop: Spacing.sm,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   rowItem: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   rowLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginBottom: 2 },
   rowValue: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
-  statsRow: {
-    flexDirection: 'row', gap: Spacing.sm,
-    marginHorizontal: Spacing.md, marginBottom: Spacing.md,
+  gallerySection: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
+  galleryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  galleryTitle: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '700' },
+  galleryCount: { fontSize: FontSizes.xs, color: Colors.gold, fontWeight: '700' },
+  statsRow: { flexDirection: 'row', gap: Spacing.sm, marginHorizontal: Spacing.md, marginBottom: Spacing.md },
   statMini: {
-    flex: 1, backgroundColor: Colors.bgCard,
-    borderRadius: Radius.md, padding: Spacing.md,
-    alignItems: 'center', borderWidth: 1,
+    flex: 1,
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
   },
   statMiniValue: { fontSize: FontSizes.xl, fontWeight: '800' },
   statMiniLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2, textAlign: 'center' },
-  personsTitle: {
-    fontSize: FontSizes.md, fontWeight: '700', color: Colors.textPrimary,
-    marginHorizontal: Spacing.md, marginBottom: Spacing.sm,
-  },
+  personsTitle: { fontSize: FontSizes.md, fontWeight: '700', color: Colors.textPrimary, marginHorizontal: Spacing.md, marginBottom: Spacing.sm },
   personRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.bgCard, borderRadius: Radius.md,
-    padding: Spacing.md, marginBottom: Spacing.sm, gap: 10,
-    borderWidth: 1, borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
     marginHorizontal: Spacing.md,
   },
   personBadge: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   personBadgeText: { fontSize: FontSizes.xs, fontWeight: '700', color: Colors.textPrimary },
   personInfo: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
   voterTag: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: Radius.full,
   },
   voterTagText: { fontSize: FontSizes.xs, fontWeight: '600' },
   noPerson: { textAlign: 'center', color: Colors.textMuted, padding: Spacing.xl },
 });
+

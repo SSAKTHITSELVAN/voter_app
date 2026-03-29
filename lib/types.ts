@@ -17,19 +17,26 @@ export interface Person {
   is_voter: boolean;
 }
 
+export interface HouseholdImage {
+  id: string;
+  household_id: string;
+  image_url: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
 export interface Household {
   id: string;
   latitude: number;
   longitude: number;
   address_text: string | null;
-  landmark_description: string | null;
   house_type: HouseType;
   unit_id: string | null;
   created_by: string;
   created_at: string;
   deleted_at: string | null;
   persons: Person[];
-  images: HouseholdImage[];
+  landmark_images: HouseholdImage[];
 }
 
 export interface HouseholdBrief {
@@ -40,25 +47,24 @@ export interface HouseholdBrief {
   house_type: HouseType;
   created_at: string;
   distance_metres: number | null;
+  landmark_image_count?: number;
+  landmark_image_url?: string | null;
 }
 
-export interface HouseholdImage {
-  id: string;
-  household_id: string;
-  image_url: string;
-  uploaded_by: string;
-  created_at: string;
+export interface UploadableImage {
+  uri: string;
+  name: string;
+  type: string;
 }
 
 export interface HouseholdCreate {
   latitude: number;
   longitude: number;
   address_text?: string;
-  landmark_description?: string;
   house_type: HouseType;
   unit_id?: string;
   persons: Person[];
-  image_urls: string[];
+  landmark_image_urls?: string[];
 }
 
 export interface VerificationRecord {
@@ -119,6 +125,13 @@ export interface CollectionRecord {
   id: string;
   household_id: string;
   collected_by: string;
+  collected_by_name?: string | null;
+  collected_by_phone?: string | null;
+  collected_by_role?: UserRole | null;
+  household_address_text?: string | null;
+  household_house_type?: HouseType | null;
+  household_latitude?: number | null;
+  household_longitude?: number | null;
   total_people: number;
   total_voters: number;
   raw_data_json: Record<string, unknown> | null;

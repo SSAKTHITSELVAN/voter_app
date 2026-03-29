@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
+import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { householdsApi } from '@/lib/api';
 import { GenderType, HouseType, HouseholdCreate } from '@/lib/types';
@@ -63,7 +63,7 @@ export default function BulkScreen() {
   // Inline error banner
   const [errorMsg, setErrorMsg] = useState('');
 
-  // ── GPS per draft ──────────────────────────────────────────────────────────
+  // â”€â”€ GPS per draft â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function getGpsForDraft(id: string) {
     setGpsLoading(id);
     setErrorMsg('');
@@ -126,7 +126,7 @@ export default function BulkScreen() {
   async function handleSubmit() {
     setErrorMsg('');
 
-    // Validate — find first missing GPS
+    // Validate â€” find first missing GPS
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
       if (!d.latitude || !d.longitude) {
@@ -149,7 +149,7 @@ export default function BulkScreen() {
           gender: p.gender,
           is_voter: p.is_voter,
         })),
-        image_urls: [],
+        landmark_image_urls: [],
       }));
 
       const res = await householdsApi.bulk(payload);
@@ -167,7 +167,7 @@ export default function BulkScreen() {
     }
   }
 
-  // ── Result Screen ──────────────────────────────────────────────────────────
+  // â”€â”€ Result Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (result) {
     const allGood = result.errors.length === 0;
     const hasSkipped = result.duplicates_skipped > 0;
@@ -214,7 +214,7 @@ export default function BulkScreen() {
               <View style={styles.resultMsg}>
                 <Ionicons name="copy-outline" size={16} color={Colors.warning} />
                 <Text style={[styles.resultMsgText, { color: Colors.warning }]}>
-                  {result.duplicates_skipped} skipped — already exist within 20m of an existing household.
+                  {result.duplicates_skipped} skipped â€” already exist within 20m of an existing household.
                 </Text>
               </View>
             )}
@@ -231,7 +231,7 @@ export default function BulkScreen() {
             {result.errors.length > 0 && (
               <View style={styles.errorList}>
                 <Text style={styles.errorTitle}>
-                  ⚠️ {result.errors.length} Error{result.errors.length !== 1 ? 's' : ''}
+                  âš ï¸ {result.errors.length} Error{result.errors.length !== 1 ? 's' : ''}
                 </Text>
                 {result.errors.map(e => (
                   <View key={e.index} style={styles.errorItem}>
@@ -255,7 +255,7 @@ export default function BulkScreen() {
     );
   }
 
-  // ── Main Form ──────────────────────────────────────────────────────────────
+  // â”€â”€ Main Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
@@ -279,7 +279,7 @@ export default function BulkScreen() {
           keyboardShouldPersistTaps="handled"
         >
 
-          {/* ── Inline error banner ── */}
+          {/* â”€â”€ Inline error banner â”€â”€ */}
           {!!errorMsg && (
             <View style={styles.errorBanner}>
               <Ionicons name="alert-circle" size={16} color={Colors.error} />
@@ -293,7 +293,7 @@ export default function BulkScreen() {
           <View style={styles.infoBar}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.info} />
             <Text style={styles.infoText}>
-              {drafts.length} household{drafts.length !== 1 ? 's' : ''} queued · Duplicates within 20m are auto-skipped
+              {drafts.length} household{drafts.length !== 1 ? 's' : ''} queued Â· Duplicates within 20m are auto-skipped
             </Text>
           </View>
 
@@ -332,7 +332,7 @@ export default function BulkScreen() {
                   disabled={gpsLoading === draft.id}
                 >
                   <Text style={styles.gpsBtnText}>
-                    {gpsLoading === draft.id ? 'Locating…' : draft.gpsAcquired ? 'Refresh' : 'Get GPS'}
+                    {gpsLoading === draft.id ? 'Locatingâ€¦' : draft.gpsAcquired ? 'Refresh' : 'Get GPS'}
                   </Text>
                 </Pressable>
               </View>
@@ -365,7 +365,7 @@ export default function BulkScreen() {
               <View style={styles.personsSection}>
                 <View style={styles.personsTop}>
                   <Text style={styles.personsLabel}>
-                    Persons ({draft.persons.length}) · {draft.persons.filter(p => p.is_voter).length} voter{draft.persons.filter(p => p.is_voter).length !== 1 ? 's' : ''}
+                    Persons ({draft.persons.length}) Â· {draft.persons.filter(p => p.is_voter).length} voter{draft.persons.filter(p => p.is_voter).length !== 1 ? 's' : ''}
                   </Text>
                   <Pressable onPress={() => addPerson(draft.id)} style={styles.addPersonBtn}>
                     <Ionicons name="add" size={14} color={Colors.primary} />
@@ -427,7 +427,7 @@ export default function BulkScreen() {
 
           {/* Submit */}
           <ThemedButton
-            title={submitting ? 'Uploading…' : `Upload ${drafts.length} Household${drafts.length !== 1 ? 's' : ''}`}
+            title={submitting ? 'Uploadingâ€¦' : `Upload ${drafts.length} Household${drafts.length !== 1 ? 's' : ''}`}
             onPress={handleSubmit}
             loading={submitting}
             fullWidth
