@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
 import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { ThemedButton } from '@/components/ThemedButton';
 import { CollectionRecordsPanel } from '@/components/CollectionRecordsPanel';
@@ -56,24 +57,27 @@ export default function AdminScreen() {
       <View style={styles.header}>
         <View style={styles.headerDecorLeft} />
         <View style={styles.headerDecorRight} />
-        <View style={styles.headerContent}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="shield-checkmark" size={26} color={Colors.textPrimary} />
+        <View style={[styles.headerContent, { justifyContent: 'space-between' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: Spacing.sm }}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="shield-checkmark" size={26} color={Colors.textPrimary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Admin Panel</Text>
+              <Text style={styles.subtitle}>
+                {tab === 'records'
+                  ? 'Collected data, export, and audit view'
+                  : tab === 'households'
+                    ? 'Manage & edit households'
+                    : tab === 'buildings'
+                      ? 'Manage & edit buildings'
+                      : role === 'SUPER_ADMIN'
+                        ? 'Manage Admins'
+                        : 'Manage Field Users'}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.title}>Admin Panel</Text>
-            <Text style={styles.subtitle}>
-              {tab === 'records'
-                ? 'Collected data, export, and audit view'
-                : tab === 'households'
-                  ? 'Manage & edit households'
-                  : tab === 'buildings'
-                    ? 'Manage & edit buildings'
-                    : role === 'SUPER_ADMIN'
-                      ? 'Manage Admins'
-                      : 'Manage Field Users'}
-            </Text>
-          </View>
+          <HeaderLanguageSwitcher />
         </View>
       </View>
 
