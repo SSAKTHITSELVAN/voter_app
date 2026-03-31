@@ -4,8 +4,10 @@ import {
   Alert,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +18,10 @@ import { LandmarkImageGallery } from '@/components/LandmarkImageGallery';
 import { ThemedButton } from '@/components/ThemedButton';
 import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
 import { householdsApi, resolveApiUrl } from '@/lib/api';
-import { Household, HouseholdBrief } from '@/lib/types';
+import { Household, HouseholdBrief, HouseholdUpdate, GenderType, HouseType } from '@/lib/types';
 import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
 import { useTranslation } from 'react-i18next';
+import { AuthStore } from '@/lib/auth';
 
 const RADII = [100, 250, 500, 1000, 5000];
 export default function HouseholdsScreen() {
@@ -75,7 +78,17 @@ export default function HouseholdsScreen() {
   }
 
   if (selected) {
-    return <HouseholdDetail household={selected} onBack={() => setSelected(null)} />;
+    return (
+      <HouseholdDetail
+        household={selected}
+        onBack={() => setSelected(null)}
+        onRefresh={() => {
+          void fetchNearby();
+          // Also reload the detail if still viewing it
+          void openHousehold(selected.id).catch(() => setSelected(null));
+        }}
+      />
+    );
   }
 
   return (
@@ -152,22 +165,202 @@ export default function HouseholdsScreen() {
   );
 }
 
-function HouseholdDetail({ household, onBack }: { household: Household; onBack: () => void }) {
+function HouseholdDetail({
+  household,
+  onBack,
+  onRefresh,
+}: {
+  household: Household;
+  onBack: () => void;
+  onRefresh?: () => void;
+}) {
   const { t } = useTranslation();
+  const role = AuthStore.getRole();
+  const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletingPersonId, setDeletingPersonId] = useState<string | null>(null);
+
+  // Edit form state
+  const [editAddress, setEditAddress] = useState(household.address_text ?? '');
+  const [editHouseType, setEditHouseType] = useState<HouseType>(household.house_type);
+
   const voterCount = household.persons.filter((person) => person.is_voter).length;
   const galleryImages = household.landmark_images.map((image) => ({
     id: image.id,
     uri: resolveApiUrl(image.image_url),
   }));
 
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload: HouseholdUpdate = {};
+      if (editAddress.trim() !== (household.address_text ?? '')) {
+        payload.address_text = editAddress.trim() || null;
+      }
+      if (editHouseType !== household.house_type) {
+        payload.house_type = editHouseType;
+        if (editHouseType === 'INDIVIDUAL') payload.unit_id = null;
+      }
+      await householdsApi.update(household.id, payload);
+      Alert.alert(t('Updated'), t('Household updated successfully.'));
+      setEditing(false);
+      onRefresh?.();
+    } catch (err: any) {
+      Alert.alert(t('Error'), err.message ?? t('Failed to update.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function confirmDelete() {
+    Alert.alert(
+      t('Delete Household'),
+      t('This will permanently remove the household. Continue?'),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Delete'),
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await householdsApi.delete(household.id);
+              Alert.alert(t('Deleted'), t('Household removed.'));
+              onBack();
+              onRefresh?.();
+            } catch (err: any) {
+              Alert.alert(t('Error'), err.message ?? t('Failed to delete.'));
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  function confirmDeletePerson(personId: string, personName: string | null | undefined) {
+    Alert.alert(
+      t('Remove Person'),
+      t('Remove {{name}} from this household?', { name: personName?.trim() || t('Unknown') }),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Remove'),
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingPersonId(personId);
+            try {
+              await householdsApi.deletePerson(household.id, personId);
+              onRefresh?.();
+            } catch (err: any) {
+              Alert.alert(t('Error'), err.message ?? t('Failed to remove person.'));
+            } finally {
+              setDeletingPersonId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   return (
     <View style={styles.flex}>
+      {/* Header */}
       <View style={styles.detailHeader}>
         <Pressable onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.detailTitle}>{t('Household Details')}</Text>
+        {isAdmin && (
+          <View style={{ flexDirection: 'row', gap: 8, marginLeft: 'auto' }}>
+            <Pressable
+              onPress={() => {
+                setEditAddress(household.address_text ?? '');
+                setEditHouseType(household.house_type);
+                setEditing((e) => !e);
+              }}
+              style={[styles.detailActionBtn, { borderColor: Colors.primary }]}
+            >
+              <Ionicons name={editing ? 'close' : 'create-outline'} size={18} color={Colors.primary} />
+            </Pressable>
+            <Pressable
+              onPress={confirmDelete}
+              disabled={deleting}
+              style={[styles.detailActionBtn, { borderColor: Colors.error }]}
+            >
+              {deleting
+                ? <ActivityIndicator size="small" color={Colors.error} />
+                : <Ionicons name="trash-outline" size={18} color={Colors.error} />}
+            </Pressable>
+          </View>
+        )}
       </View>
+
+      {/* Inline Edit Form */}
+      {editing && isAdmin && (
+        <View style={styles.editCard}>
+          <Text style={styles.editTitle}>{t('Edit Household')}</Text>
+
+          <Text style={styles.editLabel}>{t('House Type')}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: Spacing.md }}>
+            {(['INDIVIDUAL', 'APARTMENT'] as HouseType[]).map((type) => (
+              <Pressable
+                key={type}
+                onPress={() => setEditHouseType(type)}
+                style={[
+                  styles.editTypeBtn,
+                  editHouseType === type && styles.editTypeBtnActive,
+                ]}
+              >
+                <Ionicons
+                  name={type === 'APARTMENT' ? 'business-outline' : 'home-outline'}
+                  size={15}
+                  color={editHouseType === type ? Colors.textPrimary : Colors.midGray}
+                />
+                <Text
+                  style={[
+                    styles.editTypeBtnText,
+                    editHouseType === type && { color: Colors.textPrimary },
+                  ]}
+                >
+                  {t(type)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.editLabel}>{t('Address')}</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editAddress}
+            onChangeText={setEditAddress}
+            placeholder={t('House number, street...')}
+            placeholderTextColor={Colors.midGray}
+            multiline
+          />
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: Spacing.sm }}>
+            <ThemedButton
+              title={saving ? t('Saving...') : t('Save Changes')}
+              onPress={handleSave}
+              loading={saving}
+              size="sm"
+              style={{ flex: 1 }}
+            />
+            <ThemedButton
+              title={t('Cancel')}
+              onPress={() => setEditing(false)}
+              variant="outline"
+              size="sm"
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      )}
 
       <FlatList
         data={household.persons}
@@ -253,6 +446,17 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
                 {item.is_voter ? t('Voter') : t('Non-voter')}
               </Text>
             </View>
+            {isAdmin && item.id && (
+              <Pressable
+                onPress={() => confirmDeletePerson(item.id!, item.name)}
+                disabled={deletingPersonId === item.id}
+                style={{ padding: 4, marginLeft: 4 }}
+              >
+                {deletingPersonId === item.id
+                  ? <ActivityIndicator size="small" color={Colors.error} />
+                  : <Ionicons name="close-circle" size={18} color={Colors.error} />}
+              </Pressable>
+            )}
           </View>
         )}
         ListEmptyComponent={<Text style={styles.noPerson}>{t('No persons recorded.')}</Text>}
@@ -460,4 +664,71 @@ const styles = StyleSheet.create({
   },
   voterTagText: { fontSize: FontSizes.xs, fontWeight: '600' },
   noPerson: { textAlign: 'center', color: Colors.textMuted, padding: Spacing.xl },
+  // ── Detail action buttons (edit / delete in header) ──
+  detailActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.bgCard,
+  },
+  // ── Inline edit form ──
+  editCard: {
+    backgroundColor: Colors.bgCard,
+    marginHorizontal: Spacing.md,
+    marginVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.primary + '55',
+  },
+  editTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.md,
+  },
+  editLabel: {
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    marginBottom: 6,
+    letterSpacing: 0.4,
+  },
+  editTypeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCardRaised,
+  },
+  editTypeBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  editTypeBtnText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+    color: Colors.midGray,
+  },
+  editInput: {
+    backgroundColor: Colors.bgCardRaised,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    fontSize: FontSizes.md,
+    color: Colors.textPrimary,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    marginBottom: Spacing.sm,
+  },
 });

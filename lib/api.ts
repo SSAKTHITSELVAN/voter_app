@@ -2,20 +2,23 @@ import { AuthStore } from './auth';
 import {
   AuthUser,
   Building,
+  BuildingUpdate,
   BulkUploadResult,
   CollectionRecord,
   DuplicateCheckResult,
   Household,
   HouseholdBrief,
   HouseholdCreate,
+  HouseholdUpdate,
   Unit,
+  UnitUpdate,
   UploadableImage,
   User,
   VerificationCreate,
   VerificationRecord,
 } from './types';
 
-const BASE_URL = 'http://13.62.101.248:8000';
+const BASE_URL = 'https://d1c519tq-8000.inc1.devtunnels.ms';
 
 export const API_BASE_URL = BASE_URL;
 
@@ -210,6 +213,10 @@ export const buildingsApi = {
     total_floors?: number;
   }) => request<Building>('POST', '/buildings', data),
   get: (id: string) => request<Building>('GET', `/buildings/${id}`),
+  list: (params?: { limit?: number; offset?: number; search?: string }) =>
+    request<{ items: Building[]; total: number }>('GET', '/buildings/all', undefined, params),
+  update: (id: string, data: BuildingUpdate) => request<Building>('PUT', `/buildings/${id}`, data),
+  delete: (id: string) => request<{ message: string }>('DELETE', `/buildings/${id}`),
   createUnit: (data: {
     building_id: string;
     flat_number: string;
@@ -217,6 +224,10 @@ export const buildingsApi = {
   }) => request<Unit>('POST', '/buildings/units', data),
   listUnits: (buildingId: string) =>
     request<Unit[]>('GET', `/buildings/${buildingId}/units`),
+  updateUnit: (unitId: string, data: UnitUpdate) =>
+    request<Unit>('PUT', `/buildings/units/${unitId}`, data),
+  deleteUnit: (unitId: string) =>
+    request<{ message: string }>('DELETE', `/buildings/units/${unitId}`),
 };
 
 export const householdsApi = {
@@ -231,20 +242,15 @@ export const householdsApi = {
       buildCreateHouseholdFormData(data, landmarkImages),
     );
   },
+  list: (params?: { limit?: number; offset?: number; search?: string }) =>
+    request<{ items: Household[]; total: number }>('GET', '/households/all', undefined, params),
   get: (id: string) => request<Household>('GET', `/households/${id}`),
+  update: (id: string, data: HouseholdUpdate) =>
+    request<Household>('PUT', `/households/${id}`, data),
   delete: (id: string) =>
     request<{ message: string }>('DELETE', `/households/${id}`),
-  duplicateCheck: (latitude: number, longitude: number, radius_metres = 20) =>
-    request<DuplicateCheckResult>(
-      'GET',
-      '/households/duplicate-check',
-      undefined,
-      {
-        latitude,
-        longitude,
-        radius_metres,
-      },
-    ),
+  deletePerson: (householdId: string, personId: string) =>
+    request<{ message: string }>('DELETE', `/households/${householdId}/persons/${personId}`),
   nearby: (
     latitude: number,
     longitude: number,

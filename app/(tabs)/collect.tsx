@@ -260,30 +260,7 @@ export default function CollectScreen() {
     }
 
     setSubmitting(true);
-    try {
-      const check = await householdsApi.duplicateCheck(lat, lon, 20);
-      if (check.has_duplicates) {
-        setSubmitting(false);
-        Alert.alert(
-          t('Duplicate detected'),
-          t('{{count}} similar household(s) were found within 20m. This household cannot be created until you move to a different location or use the existing nearby record.', { count: check.duplicates.length }),
-          [
-            {
-              text: t('OK'),
-              onPress: () => {
-                showBanner('warning', t('{{count}} duplicate(s) found within 20 metres. Creation blocked by server.', { count: check.duplicates.length }));
-              },
-            },
-          ],
-        );
-        return;
-      }
-
-      await doCreate(lat, lon);
-    } catch (err: any) {
-      showBanner('error', err.message ?? t('Failed to submit. Please try again.'));
-      setSubmitting(false);
-    }
+    await doCreate(lat, lon);
   }
 
   async function doCreate(lat: number, lon: number) {

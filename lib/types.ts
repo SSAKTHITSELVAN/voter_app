@@ -68,6 +68,13 @@ export interface HouseholdCreate {
   landmark_image_urls?: string[];
 }
 
+export interface HouseholdUpdate {
+  address_text?: string | null;
+  house_type?: HouseType;
+  unit_id?: string | null;
+  persons?: Omit<Person, 'id'>[];
+}
+
 export interface VerificationRecord {
   id: string;
   household_id: string;
@@ -102,12 +109,23 @@ export interface Building {
   created_at: string;
 }
 
+export interface BuildingUpdate {
+  name?: string | null;
+  address_text?: string | null;
+  total_floors?: number | null;
+}
+
 export interface Unit {
   id: string;
   building_id: string;
   flat_number: string;
   floor_number: number | null;
   created_at: string;
+}
+
+export interface UnitUpdate {
+  flat_number?: string | null;
+  floor_number?: number | null;
 }
 
 export interface DuplicateCheckResult {
