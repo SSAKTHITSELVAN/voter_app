@@ -15,7 +15,7 @@ import {
   VerificationRecord,
 } from './types';
 
-const BASE_URL = 'https://d1c519tq-8000.inc1.devtunnels.ms';
+const BASE_URL = 'http://13.62.101.248:8000';
 
 export const API_BASE_URL = BASE_URL;
 

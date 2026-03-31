@@ -19,16 +19,20 @@
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/images/android-icon-foreground.png",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#CC0000"
       },
       "package": "com.admk.voterapp",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -41,10 +45,8 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#CC0000"
+          "image": "./assets/images/icon.png",
+          "resizeMode": "cover"
         }
       ],
       [
@@ -59,10 +61,24 @@
           "photosPermission": "Allow Voter App to use your photos for household landmark images.",
           "cameraPermission": "Allow Voter App to use your camera for household landmark images."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b98c44b5-e624-4051-8d75-9e6df8c8f26e"
+      }
     }
   }
 }
