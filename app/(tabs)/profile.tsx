@@ -16,8 +16,11 @@ import { ThemedButton } from '@/components/ThemedButton';
 import { usersApi } from '@/lib/api';
 import { AuthStore } from '@/lib/auth';
 import { User } from '@/lib/types';
+import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,10 +40,10 @@ export default function ProfileScreen() {
   }
 
   function handleLogout() {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('Logout'), t('Are you sure you want to logout?'), [
+      { text: t('Cancel'), style: 'cancel' },
       {
-        text: 'Logout',
+        text: t('Logout'),
         style: 'destructive',
         onPress: () => {
           AuthStore.clear();
@@ -66,39 +69,48 @@ export default function ProfileScreen() {
         <View style={styles.headerDecorLeft} />
         <View style={styles.headerDecorRight} />
         <View style={styles.headerDecorTop} />
+        
+        {/* Language Switcher - Top Right */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: Spacing.md, paddingTop: 50 }}>
+          <HeaderLanguageSwitcher />
+        </View>
 
-        <View style={styles.avatarWrap}>
-          <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
-              </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <View style={{ alignItems: 'center' }}>
+            <View style={styles.avatarWrap}>
+              <View style={styles.avatarRing}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.avatarBadge}>
+                <Ionicons name="checkmark" size={10} color={Colors.textPrimary} />
+              </View>
+            </View>
+            <Text style={styles.userName}>{user?.name ?? '—'}</Text>
+            <Text style={styles.userPhone}>{user?.phone ?? '—'}</Text>
+            <View style={styles.roleChip}>
+              {user && <StatusBadge status={user.role} />}
             </View>
           </View>
-          <View style={styles.avatarBadge}>
-            <Ionicons name="checkmark" size={10} color={Colors.textPrimary} />
-          </View>
-        </View>
-        <Text style={styles.userName}>{user?.name ?? '—'}</Text>
-        <Text style={styles.userPhone}>{user?.phone ?? '—'}</Text>
-        <View style={styles.roleChip}>
-          {user && <StatusBadge status={user.role} />}
         </View>
       </View>
 
       {/* Account Details */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Details</Text>
+        <Text style={styles.sectionTitle}>{t('Account Details')}</Text>
         <View style={styles.infoCard}>
-          <InfoRow icon="person-outline" label="Full Name" value={user?.name ?? '—'} />
+          <InfoRow icon="person-outline" label={t('Full Name')} value={user?.name ?? '—'} />
           <Separator />
-          <InfoRow icon="call-outline" label="Phone" value={user?.phone ?? '—'} />
+          <InfoRow icon="call-outline" label={t('Phone')} value={user?.phone ?? '—'} />
           <Separator />
-          <InfoRow icon="shield-outline" label="Role" value={user?.role ?? '—'} />
+          <InfoRow icon="shield-outline" label={t('Role')} value={user?.role ?? '—'} />
           <Separator />
           <InfoRow
             icon="calendar-outline"
-            label="Joined"
+            label={t('Joined')}
             value={user ? new Date(user.created_at).toLocaleDateString('en-IN', {
               day: 'numeric', month: 'long', year: 'numeric'
             }) : '—'}
@@ -106,8 +118,8 @@ export default function ProfileScreen() {
           <Separator />
           <InfoRow
             icon="ellipse-outline"
-            label="Status"
-            value={user?.deleted_at ? 'Inactive' : 'Active'}
+            label={t('Status')}
+            value={user?.deleted_at ? t('Inactive') : t('Active')}
             valueColor={user?.deleted_at ? Colors.error : Colors.success}
           />
         </View>
@@ -115,32 +127,32 @@ export default function ProfileScreen() {
 
       {/* App Info */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App Info</Text>
+        <Text style={styles.sectionTitle}>{t('App Info')}</Text>
         <View style={styles.infoCard}>
-          <InfoRow icon="phone-portrait-outline" label="App Version" value="1.0.0" />
+          <InfoRow icon="phone-portrait-outline" label={t('App Version')} value="1.0.0" />
           <Separator />
-          <InfoRow icon="server-outline" label="Backend" value="FastAPI + PostgreSQL" />
+          <InfoRow icon="server-outline" label={t('Backend')} value="FastAPI + PostgreSQL" />
           <Separator />
-          <InfoRow icon="navigate-outline" label="Location" value="Haversine (no extensions)" />
+          <InfoRow icon="navigate-outline" label={t('Location')} value="Haversine (no extensions)" />
         </View>
       </View>
 
       {/* Help */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Help</Text>
+        <Text style={styles.sectionTitle}>{t('Help')}</Text>
         <View style={styles.infoCard}>
-          <MenuRow icon="help-circle-outline" label="How to collect data" />
+          <MenuRow icon="help-circle-outline" label={t('How to collect data')} />
           <Separator />
-          <MenuRow icon="information-circle-outline" label="About ADMK Field App" />
+          <MenuRow icon="information-circle-outline" label={t('About ADMK Field App')} />
           <Separator />
-          <MenuRow icon="chatbubble-outline" label="Contact Admin" />
+          <MenuRow icon="chatbubble-outline" label={t('Contact Admin')} />
         </View>
       </View>
 
       {/* Logout */}
       <View style={styles.logoutWrap}>
         <ThemedButton
-          title="Logout"
+          title={t('Logout')}
           onPress={handleLogout}
           variant="outline"
           fullWidth
@@ -154,7 +166,7 @@ export default function ProfileScreen() {
           <View style={styles.footerDot} />
         </View>
         <Text style={styles.footer}>
-          AIADMK Voter Data Platform · v1.0
+          {t('AIADMK Voter Data Platform · v1.0')}
         </Text>
         <View style={styles.footerLogoWrap}>
           <View style={styles.footerDot} />
@@ -205,7 +217,7 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 64, paddingBottom: Spacing.xl,
+    paddingTop: 10, paddingBottom: Spacing.xl,
     alignItems: 'center', gap: 6,
     overflow: 'hidden',
   },

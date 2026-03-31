@@ -13,15 +13,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
+import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
 import { LandmarkImageGallery } from '@/components/LandmarkImageGallery';
 import { ThemedButton } from '@/components/ThemedButton';
 import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
 import { householdsApi, resolveApiUrl, verificationApi } from '@/lib/api';
 import { Household, HouseholdBrief, VerificationStatus } from '@/lib/types';
+import { useTranslation } from 'react-i18next';
 
 type Step = 'search' | 'pick' | 'verify' | 'done';
 
 export default function VerifyScreen() {
+  const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
 
   const [step, setStep] = useState<Step>('search');
@@ -42,7 +45,7 @@ export default function VerifyScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Location permission is required to find nearby households.');
+        setErrorMsg(t('Location permission is required to find nearby households.'));
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -51,7 +54,7 @@ export default function VerifyScreen() {
       setStep('pick');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      setErrorMsg(err.message ?? 'Could not get location. Please try again.');
+      setErrorMsg(err.message ?? t('Could not get location. Please try again.'));
     } finally {
       setGpsLoading(false);
     }
@@ -69,7 +72,7 @@ export default function VerifyScreen() {
       const full = await householdsApi.get(household.id);
       setHouseholdDetail(full);
     } catch {
-      setErrorMsg('Could not load household details. You can still submit verification.');
+      setErrorMsg(t('Household details unavailable'));
     } finally {
       setDetailLoading(false);
     }
@@ -88,7 +91,7 @@ export default function VerifyScreen() {
       setStep('done');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      setErrorMsg(err.message ?? 'Submission failed. Please try again.');
+      setErrorMsg(err.message ?? t('Submission failed. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -122,19 +125,22 @@ export default function VerifyScreen() {
         <View style={styles.header}>
           <View style={styles.headerDecorLeft} />
           <View style={styles.headerDecorRight} />
-          <View style={styles.headerContent}>
-            <View style={styles.headerIconWrap}>
-              <Ionicons name="checkmark-circle" size={28} color={Colors.textPrimary} />
+          <View style={[styles.headerContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}> 
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={styles.headerIconWrap}>
+                <Ionicons name="checkmark-circle" size={28} color={Colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={styles.title}>{t('Verify Household')}</Text>
+                <Text style={styles.subtitle}>{t('Confirm collected data and landmark images')}</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.title}>Verify Household</Text>
-              <Text style={styles.subtitle}>Confirm collected data and landmark images</Text>
-            </View>
+            <HeaderLanguageSwitcher />
           </View>
         </View>
 
         <View style={styles.steps}>
-          {['Search', 'Select', 'Verify'].map((label, index) => {
+          {[t('Search'), t('Select'), t('Verify')].map((label, index) => {
             const done = index < stepIndex || step === 'done';
             const active = index === stepIndex && step !== 'done';
             return (
@@ -172,12 +178,12 @@ export default function VerifyScreen() {
             <View style={styles.iconBlock}>
               <Ionicons name="search-circle" size={56} color={Colors.primary} />
             </View>
-            <Text style={styles.cardTitle}>Find Nearby Household</Text>
+            <Text style={styles.cardTitle}>{t('Find Nearby Household')}</Text>
             <Text style={styles.cardDesc}>
-              We will use your current GPS location to find households within 200 metres.
+              {t('We will use your current GPS location to find households within 200 metres.')}
             </Text>
             <ThemedButton
-              title={gpsLoading ? 'Locating...' : 'Find Nearby Households'}
+              title={gpsLoading ? t('Locating...') : t('Find Nearby Households')}
               onPress={() => void searchNearby()}
               loading={gpsLoading}
               fullWidth
@@ -190,18 +196,18 @@ export default function VerifyScreen() {
         {step === 'pick' && (
           <View style={styles.card}>
             <View style={styles.pickHeader}>
-              <Text style={styles.cardTitle}>Select Household</Text>
+              <Text style={styles.cardTitle}>{t('Select Household')}</Text>
               <Pressable onPress={() => setStep('search')}>
-                <Text style={styles.changeBtn}>Back</Text>
+                <Text style={styles.changeBtn}>{t('Back')}</Text>
               </Pressable>
             </View>
 
             {nearbyHouseholds.length === 0 ? (
               <View style={styles.emptyPick}>
                 <Ionicons name="home-outline" size={36} color={Colors.border} />
-                <Text style={styles.emptyPickText}>No households found within 200m</Text>
+                <Text style={styles.emptyPickText}>{t('No households found within 200m')}</Text>
                 <ThemedButton
-                  title="Search Again"
+                  title={t('Search Again')}
                   onPress={() => void searchNearby()}
                   variant="outline"
                   size="sm"
@@ -211,7 +217,7 @@ export default function VerifyScreen() {
             ) : (
               <>
                 <Text style={styles.pickCount}>
-                  {nearbyHouseholds.length} household{nearbyHouseholds.length !== 1 ? 's' : ''} found nearby
+                  {t(nearbyHouseholds.length === 1 ? '{{count}} household found nearby' : '{{count}} households found nearby', { count: nearbyHouseholds.length })}
                 </Text>
                 {nearbyHouseholds.map((household) => {
                   const previewUrl = household.landmark_image_url ? resolveApiUrl(household.landmark_image_url) : null;
@@ -231,16 +237,16 @@ export default function VerifyScreen() {
                         />
                         <View style={styles.pickMeta}>
                           <Text style={styles.pickAddress} numberOfLines={1}>
-                            {household.address_text ?? 'No address'}
+                            {household.address_text ?? t('No address')}
                           </Text>
                           <Text style={styles.pickDist}>
                             {household.distance_metres != null
-                              ? `${Math.round(household.distance_metres)}m away Ã‚Â· ${household.house_type}`
-                              : household.house_type}
+                              ? t('{{distance}}m away', { distance: Math.round(household.distance_metres) }) + ` · ${t(household.house_type)}`
+                              : t(household.house_type)}
                           </Text>
                           {imageCount > 0 ? (
                             <Text style={styles.pickImageMeta}>
-                              {imageCount} landmark image{imageCount !== 1 ? 's' : ''}
+                              {t(imageCount === 1 ? '{{count}} landmark image' : '{{count}} landmark images', { count: imageCount })}
                             </Text>
                           ) : null}
                         </View>
@@ -264,13 +270,13 @@ export default function VerifyScreen() {
         {step === 'verify' && selectedHousehold && (
           <View style={styles.card}>
             <View style={styles.pickHeader}>
-              <Text style={styles.cardTitle}>Submit Verification</Text>
+              <Text style={styles.cardTitle}>{t('Submit Verification')}</Text>
               <Pressable onPress={() => { setErrorMsg(''); setStep('pick'); }}>
-                <Text style={styles.changeBtn}>Change</Text>
+                <Text style={styles.changeBtn}>{t('Change')}</Text>
               </Pressable>
             </View>
 
-                        <View style={styles.selectedCard}>
+            <View style={styles.selectedCard}>
               <Ionicons
                 name={selectedHousehold.house_type === 'APARTMENT' ? 'business' : 'home'}
                 size={16}
@@ -282,12 +288,12 @@ export default function VerifyScreen() {
                 </Text>
                 {selectedHousehold.distance_metres != null ? (
                   <Text style={styles.selectedDist}>
-                    {Math.round(selectedHousehold.distance_metres)}m away Ã‚Â· {selectedHousehold.house_type}
+                    {t('{{distance}}m away', { distance: Math.round(selectedHousehold.distance_metres) })} · {t(selectedHousehold.house_type)}
                   </Text>
                 ) : null}
                 {selectedImageCount > 0 ? (
                   <Text style={styles.pickImageMeta}>
-                    {selectedImageCount} landmark image{selectedImageCount !== 1 ? 's' : ''}
+                    {t(selectedImageCount === 1 ? '{{count}} landmark image' : '{{count}} landmark images', { count: selectedImageCount })}
                   </Text>
                 ) : null}
               </View>
@@ -300,22 +306,22 @@ export default function VerifyScreen() {
               )}
             </View>
 
-            <Text style={styles.sectionLabel}>RECORDED DATA</Text>
+            <Text style={styles.sectionLabel}>{t('RECORDED DATA')}</Text>
             {detailLoading ? (
               <View style={styles.detailLoading}>
                 <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.detailLoadingText}>Loading household data...</Text>
+                <Text style={styles.detailLoadingText}>{t('Loading household data...')}</Text>
               </View>
             ) : householdDetail ? (
               <HouseholdDataPanel household={householdDetail} />
             ) : (
               <View style={styles.detailUnavailable}>
                 <Ionicons name="information-circle-outline" size={15} color={Colors.textMuted} />
-                <Text style={styles.detailUnavailableText}>Household details unavailable</Text>
+                <Text style={styles.detailUnavailableText}>{t('Household details unavailable')}</Text>
               </View>
             )}
 
-            <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>Verification Status</Text>
+            <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>{t('Verification Status')}</Text>
             <View style={styles.statusRow}>
               <Pressable
                 onPress={() => setVerifyStatus('MATCHED')}
@@ -326,8 +332,8 @@ export default function VerifyScreen() {
                   size={22}
                   color={verifyStatus === 'MATCHED' ? Colors.success : Colors.midGray}
                 />
-                <Text style={[styles.statusBtnText, verifyStatus === 'MATCHED' && { color: Colors.success }]}>MATCHED</Text>
-                <Text style={styles.statusBtnSub}>Data is accurate</Text>
+                <Text style={[styles.statusBtnText, verifyStatus === 'MATCHED' && { color: Colors.success }]}>{t('MATCHED')}</Text>
+                <Text style={styles.statusBtnSub}>{t('Data is accurate')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => setVerifyStatus('MISMATCH')}
@@ -338,17 +344,17 @@ export default function VerifyScreen() {
                   size={22}
                   color={verifyStatus === 'MISMATCH' ? Colors.error : Colors.midGray}
                 />
-                <Text style={[styles.statusBtnText, verifyStatus === 'MISMATCH' && { color: Colors.error }]}>MISMATCH</Text>
-                <Text style={styles.statusBtnSub}>Data differs</Text>
+                <Text style={[styles.statusBtnText, verifyStatus === 'MISMATCH' && { color: Colors.error }]}>{t('MISMATCH')}</Text>
+                <Text style={styles.statusBtnSub}>{t('Data differs')}</Text>
               </Pressable>
             </View>
 
-            <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Notes (optional)</Text>
+            <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>{t('Notes (optional)')}</Text>
             <TextInput
               style={styles.notesInput}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Any observations or discrepancies..."
+              placeholder={t('Any observations or discrepancies...')}
               placeholderTextColor={Colors.midGray}
               multiline
               numberOfLines={3}
@@ -356,7 +362,7 @@ export default function VerifyScreen() {
             />
 
             <ThemedButton
-              title={submitting ? 'Submitting...' : 'Submit Verification'}
+              title={submitting ? t('Submitting...') : t('Submit Verification')}
               onPress={() => void submitVerification()}
               loading={submitting}
               fullWidth
@@ -377,12 +383,12 @@ export default function VerifyScreen() {
             </View>
 
             <Text style={styles.doneTitle}>
-              {verifyStatus === 'MATCHED' ? 'Verified as Matched' : 'Mismatch Recorded'}
+              {verifyStatus === 'MATCHED' ? t('Verified as Matched') : t('Mismatch Recorded')}
             </Text>
             <Text style={styles.doneDesc}>
               {verifyStatus === 'MATCHED'
-                ? 'The household data has been confirmed as accurate.'
-                : 'A mismatch has been logged for review by an admin.'}
+                ? t('The household data has been confirmed as accurate.')
+                : t('A mismatch has been logged for review by an admin.')}
             </Text>
 
             <View
@@ -395,43 +401,43 @@ export default function VerifyScreen() {
               ]}
             >
               <View style={styles.doneSummaryRow}>
-                <Text style={styles.doneSummaryLabel}>Household</Text>
+                <Text style={styles.doneSummaryLabel}>{t('Household')}</Text>
                 <Text style={styles.doneSummaryValue} numberOfLines={1}>
-                  {selectedHousehold?.address_text ?? 'No address'}
+                  {selectedHousehold?.address_text ?? t('No address')}
                 </Text>
               </View>
               {householdDetail ? (
                 <>
                   <View style={styles.doneSummaryRow}>
-                    <Text style={styles.doneSummaryLabel}>Persons</Text>
+                    <Text style={styles.doneSummaryLabel}>{t('Persons')}</Text>
                     <Text style={styles.doneSummaryValue}>{householdDetail.persons.length}</Text>
                   </View>
                   <View style={styles.doneSummaryRow}>
-                    <Text style={styles.doneSummaryLabel}>Landmark Images</Text>
+                    <Text style={styles.doneSummaryLabel}>{t('Landmark Images')}</Text>
                     <Text style={styles.doneSummaryValue}>{householdDetail.landmark_images.length}</Text>
                   </View>
                 </>
               ) : null}
               <View style={styles.doneSummaryRow}>
-                <Text style={styles.doneSummaryLabel}>Status</Text>
+                <Text style={styles.doneSummaryLabel}>{t('Status')}</Text>
                 <Text
                   style={[
                     styles.doneSummaryValue,
                     { color: verifyStatus === 'MATCHED' ? Colors.success : Colors.error },
                   ]}
                 >
-                  {verifyStatus}
+                  {t(verifyStatus)}
                 </Text>
               </View>
               {!!notes.trim() && (
                 <View style={styles.doneSummaryRow}>
-                  <Text style={styles.doneSummaryLabel}>Notes</Text>
+                  <Text style={styles.doneSummaryLabel}>{t('Notes')}</Text>
                   <Text style={styles.doneSummaryValue} numberOfLines={2}>{notes}</Text>
                 </View>
               )}
             </View>
 
-            <ThemedButton title="Verify Another" onPress={reset} fullWidth size="lg" style={{ marginTop: Spacing.xl }} />
+            <ThemedButton title={t('Verify Another')} onPress={reset} fullWidth size="lg" style={{ marginTop: Spacing.xl }} />
           </View>
         )}
       </ScrollView>
@@ -440,6 +446,7 @@ export default function VerifyScreen() {
 }
 
 function HouseholdDataPanel({ household }: { household: Household }) {
+  const { t } = useTranslation();
   const totalPeople = household.persons.length;
   const voterCount = household.persons.filter((person) => person.is_voter).length;
   const nonVoterCount = totalPeople - voterCount;
@@ -454,41 +461,41 @@ function HouseholdDataPanel({ household }: { household: Household }) {
   return (
     <View style={panelStyles.container}>
       <View style={panelStyles.galleryHeader}>
-        <Text style={panelStyles.galleryTitle}>Landmark Images</Text>
+        <Text style={panelStyles.galleryTitle}>{t('Landmark Images')}</Text>
         <Text style={panelStyles.galleryCount}>
-          {household.landmark_images.length} image{household.landmark_images.length !== 1 ? 's' : ''}
+          {t(household.landmark_images.length === 1 ? '{{count}} image' : '{{count}} images', { count: household.landmark_images.length })}
         </Text>
       </View>
 
       <View style={panelStyles.galleryBody}>
         <LandmarkImageGallery
           images={galleryImages}
-          emptyText="No landmark images available for this household."
+          emptyText={t('No landmark images available for this household.')}
           compact
         />
       </View>
 
       <View style={panelStyles.statsRow}>
-        <StatChip label="Total" value={totalPeople} icon="people" color={Colors.info} />
-        <StatChip label="Voters" value={voterCount} icon="checkmark-circle" color={Colors.success} />
-        <StatChip label="Non-Voters" value={nonVoterCount} icon="remove-circle" color={Colors.midGray} />
+        <StatChip label={t('Total')} value={totalPeople} icon="people" color={Colors.info} />
+        <StatChip label={t('Voters')} value={voterCount} icon="checkmark-circle" color={Colors.success} />
+        <StatChip label={t('Non-Voters')} value={nonVoterCount} icon="remove-circle" color={Colors.midGray} />
       </View>
 
       {totalPeople > 0 ? (
         <View style={panelStyles.genderRow}>
-          <GenderPill label="M" count={maleCount} color="#60A5FA" />
-          <GenderPill label="F" count={femaleCount} color="#F472B6" />
-          {otherCount > 0 ? <GenderPill label="O" count={otherCount} color={Colors.gold} /> : null}
+          <GenderPill label={t('M')} count={maleCount} color="#60A5FA" />
+          <GenderPill label={t('F')} count={femaleCount} color="#F472B6" />
+          {otherCount > 0 ? <GenderPill label={t('O')} count={otherCount} color={Colors.gold} /> : null}
         </View>
       ) : null}
 
       {totalPeople === 0 ? (
         <View style={panelStyles.noPerson}>
-          <Text style={panelStyles.noPersonText}>No persons recorded for this household.</Text>
+          <Text style={panelStyles.noPersonText}>{t('No persons recorded for this household.')}</Text>
         </View>
       ) : (
         <View style={panelStyles.personList}>
-          <Text style={panelStyles.personListTitle}>Persons ({totalPeople})</Text>
+          <Text style={panelStyles.personListTitle}>{t('Persons')} ({totalPeople})</Text>
           {household.persons.map((person, index) => (
             <View key={person.id ?? index} style={panelStyles.personRow}>
               <View style={panelStyles.personBadge}>
@@ -496,7 +503,7 @@ function HouseholdDataPanel({ household }: { household: Household }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={panelStyles.personMeta}>
-                  {person.name?.trim() ? person.name.trim() : ''}{person.name?.trim() ? ' | ' : ''}{person.gender ?? 'Unknown gender'} | Age {person.age ?? '?'}
+                  {person.name?.trim() ? person.name.trim() : ''}{person.name?.trim() ? ' | ' : ''}{t(person.gender ?? 'Unknown')} | {t('Age')} {person.age ?? '?'}
                 </Text>
               </View>
               <View
@@ -511,7 +518,7 @@ function HouseholdDataPanel({ household }: { household: Household }) {
                   color={person.is_voter ? Colors.success : Colors.midGray}
                 />
                 <Text style={[panelStyles.voterTagText, { color: person.is_voter ? Colors.success : Colors.midGray }]}>
-                  {person.is_voter ? 'Voter' : 'Non-voter'}
+                  {person.is_voter ? t('Voter') : t('Non-voter')}
                 </Text>
               </View>
             </View>
@@ -522,7 +529,7 @@ function HouseholdDataPanel({ household }: { household: Household }) {
       <View style={panelStyles.footer}>
         <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} />
         <Text style={panelStyles.footerText}>
-          Recorded {new Date(household.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+          {t('Recorded {{date}}', { date: new Date(household.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) })}
         </Text>
       </View>
     </View>
@@ -597,7 +604,7 @@ const panelStyles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   genderRow: { flexDirection: 'row', gap: 6, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
-  genderPill: {
+    genderPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -797,8 +804,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.borderRed,
   },
-    selectedMeta: { flex: 1 },
-selectedText: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
+  selectedMeta: { flex: 1 },
+  selectedText: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '500' },
   selectedDist: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2 },
   selectedPreviewImage: { width: 64, height: 64, borderRadius: Radius.sm, backgroundColor: Colors.bgDark },
   selectedPreviewPlaceholder: { width: 64, height: 64, borderRadius: Radius.sm, backgroundColor: Colors.bgDark, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
@@ -861,11 +868,3 @@ selectedText: { fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '
   doneSummaryLabel: { fontSize: FontSizes.xs, color: Colors.textMuted, fontWeight: '600', minWidth: 90 },
   doneSummaryValue: { flex: 1, fontSize: FontSizes.sm, color: Colors.textPrimary, fontWeight: '700', textAlign: 'right' },
 });
-
-
-
-
-
-
-
-

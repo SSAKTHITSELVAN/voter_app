@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
@@ -7,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
 import { LandmarkImageGallery } from '@/components/LandmarkImageGallery';
 import { ThemedButton } from '@/components/ThemedButton';
 import { Colors, FontSizes, Radius, Shadows, Spacing } from '@/constants/theme';
@@ -61,6 +62,7 @@ function createUploadableImage(asset: ImagePicker.ImagePickerAsset): UploadableI
 }
 
 export default function CollectScreen() {
+  const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
 
   const [latitude, setLatitude] = useState('');
@@ -113,8 +115,8 @@ export default function CollectScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          'Permission denied',
-          'Location permission is needed for GPS coordinates.',
+          t('Location permission denied'),
+          t('Location permission is needed for GPS coordinates.'),
         );
         return;
       }
@@ -125,7 +127,7 @@ export default function CollectScreen() {
       setLongitude(loc.coords.longitude.toFixed(7));
       setGpsAcquired(true);
     } catch {
-      Alert.alert('GPS error', 'Could not get location. Please retry or enter it manually.');
+      Alert.alert(t('GPS error'), t('Could not get location. Please retry or enter it manually.'));
     } finally {
       setGpsLoading(false);
     }
@@ -152,10 +154,21 @@ export default function CollectScreen() {
     );
   }
 
+  function handleAgeChange(idx: number, ageValue: string) {
+    updatePerson(idx, 'age', ageValue);
+    const ageNum = parseInt(ageValue, 10);
+    if (!isNaN(ageNum)) {
+      const isEligible = ageNum >= 18;
+      updatePerson(idx, 'is_voter', isEligible);
+    } else {
+      updatePerson(idx, 'is_voter', false);
+    }
+  }
+
   function addSelectedImages(assets: ImagePicker.ImagePickerAsset[]) {
     const remainingSlots = MAX_LANDMARK_IMAGES - landmarkImages.length;
     if (remainingSlots <= 0) {
-      showBanner('warning', 'Only 5 landmark images can be uploaded.');
+      showBanner('warning', t('Only 5 landmark images can be uploaded.'));
       return;
     }
 
@@ -165,23 +178,23 @@ export default function CollectScreen() {
     setLandmarkImages((prev) => [...prev, ...selected]);
 
     if (assets.length > remainingSlots) {
-      showBanner('warning', 'Only the first 5 landmark images were kept.');
+      showBanner('warning', t('Only the first 5 landmark images were kept.'));
     } else {
-      showBanner('info', `${selected.length} landmark image${selected.length === 1 ? '' : 's'} added.`, 2000);
+      showBanner('info', t(selected.length === 1 ? '{{count}} landmark image added.' : '{{count}} landmark images added.', { count: selected.length }), 2000);
     }
   }
 
   async function openCamera() {
     if (landmarkImages.length >= MAX_LANDMARK_IMAGES) {
-      showBanner('warning', 'Only 5 landmark images can be uploaded.');
+      showBanner('warning', t('Only 5 landmark images can be uploaded.'));
       return;
     }
 
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
-        'Camera permission needed',
-        'Allow camera access to capture landmark images.',
+        t('Camera permission needed'),
+        t('Allow camera access to capture landmark images.'),
       );
       return;
     }
@@ -198,15 +211,15 @@ export default function CollectScreen() {
 
   async function openGallery() {
     if (landmarkImages.length >= MAX_LANDMARK_IMAGES) {
-      showBanner('warning', 'Only 5 landmark images can be uploaded.');
+      showBanner('warning', t('Only 5 landmark images can be uploaded.'));
       return;
     }
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
-        'Photos permission needed',
-        'Allow photo library access to choose landmark images.',
+        t('Photos permission needed'),
+        t('Allow photo library access to choose landmark images.'),
       );
       return;
     }
@@ -233,16 +246,16 @@ export default function CollectScreen() {
     const lon = Number.parseFloat(longitude);
 
     if (Number.isNaN(lat) || Number.isNaN(lon)) {
-      showBanner('error', 'Please get GPS coordinates before submitting.');
+      showBanner('error', t('Please get GPS coordinates before submitting.'));
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (houseType === 'APARTMENT' && !unitId.trim()) {
-      showBanner('error', 'Please enter Unit ID for apartment households.');
+      showBanner('error', t('Please enter Unit ID for apartment households.'));
       return;
     }
     if (landmarkImages.length === 0) {
-      showBanner('error', 'Add at least one landmark image before submitting.');
+      showBanner('error', t('Add at least one landmark image before submitting.'));
       return;
     }
 
@@ -252,13 +265,13 @@ export default function CollectScreen() {
       if (check.has_duplicates) {
         setSubmitting(false);
         Alert.alert(
-          'Duplicate detected',
-          `${check.duplicates.length} similar household(s) were found within 20m. This household cannot be created until you move to a different location or use the existing nearby record.`,
+          t('Duplicate detected'),
+          t('{{count}} similar household(s) were found within 20m. This household cannot be created until you move to a different location or use the existing nearby record.', { count: check.duplicates.length }),
           [
             {
-              text: 'OK',
+              text: t('OK'),
               onPress: () => {
-                showBanner('warning', `${check.duplicates.length} duplicate(s) found within 20 metres. Creation blocked by server.`);
+                showBanner('warning', t('{{count}} duplicate(s) found within 20 metres. Creation blocked by server.', { count: check.duplicates.length }));
               },
             },
           ],
@@ -268,7 +281,7 @@ export default function CollectScreen() {
 
       await doCreate(lat, lon);
     } catch (err: any) {
-      showBanner('error', err.message ?? 'Failed to submit. Please try again.');
+      showBanner('error', err.message ?? t('Failed to submit. Please try again.'));
       setSubmitting(false);
     }
   }
@@ -293,13 +306,13 @@ export default function CollectScreen() {
       );
 
       resetForm(true);
-      showBanner('success', 'Household recorded successfully. Form cleared.', 6000);
-      Alert.alert('Submitted', 'Household recorded successfully.');
+      showBanner('success', t('Household recorded successfully. Form cleared.'), 6000);
+      Alert.alert(t('Submitted'), t('Household recorded successfully.'));
     } catch (err: any) {
       if (err.status === 409) {
-        showBanner('warning', 'Duplicate household detected by server. Submission blocked.');
+        showBanner('warning', t('Duplicate household detected by server. Submission blocked.'));
       } else {
-        showBanner('error', err.message ?? 'Unknown error. Please retry.');
+        showBanner('error', err.message ?? t('Unknown error. Please retry.'));
       }
     } finally {
       setSubmitting(false);
@@ -341,19 +354,22 @@ export default function CollectScreen() {
         <View style={styles.pageHeader}>
           <View style={styles.headerDecorLeft} />
           <View style={styles.headerDecorRight} />
-          <View style={styles.headerContent}>
-            <View style={styles.headerIconWrap}>
-              <Ionicons name="camera" size={28} color={Colors.textPrimary} />
+          <View style={[styles.headerContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={styles.headerIconWrap}>
+                <Ionicons name="camera" size={28} color={Colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={styles.pageTitle}>{t('Collect Household')}</Text>
+                <Text style={styles.pageSub}>{t('Record the location, persons, and landmark photos')}</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.pageTitle}>Collect Household</Text>
-              <Text style={styles.pageSub}>Record the location, persons, and landmark photos</Text>
-            </View>
+            <HeaderLanguageSwitcher />
           </View>
           <View style={styles.progressChip}>
             <Ionicons name="images" size={12} color={Colors.gold} />
             <Text style={styles.progressChipText}>
-              {landmarkImages.length}/{MAX_LANDMARK_IMAGES} images Ãƒâ€šÃ‚Â· {persons.length} persons
+              {landmarkImages.length}/{MAX_LANDMARK_IMAGES} {t('images')} - {persons.length} {t('Persons').toLowerCase()}
             </Text>
           </View>
         </View>
@@ -393,16 +409,16 @@ export default function CollectScreen() {
               <Ionicons name="navigate" size={20} color={gpsAcquired ? Colors.success : Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardLabel}>GPS Location</Text>
+              <Text style={styles.cardLabel}>{t('GPS Location')}</Text>
               {gpsLoading ? (
                 <View style={styles.row}>
                   <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.gpsLoading}>Acquiring GPS...</Text>
+                  <Text style={styles.gpsLoading}>{t('Acquiring GPS...')}</Text>
                 </View>
               ) : gpsAcquired ? (
                 <Text style={styles.gpsCoords}>{latitude}, {longitude}</Text>
               ) : (
-                <Text style={styles.gpsError}>Tap refresh to get location</Text>
+                <Text style={styles.gpsError}>{t('Tap refresh to get location')}</Text>
               )}
             </View>
             <Pressable
@@ -417,7 +433,7 @@ export default function CollectScreen() {
 
           <View style={styles.coordRow}>
             <View style={styles.coordField}>
-              <Text style={styles.coordLabel}>Latitude</Text>
+              <Text style={styles.coordLabel}>{t('Latitude')}</Text>
               <TextInput
                 style={styles.coordInput}
                 value={latitude}
@@ -428,7 +444,7 @@ export default function CollectScreen() {
               />
             </View>
             <View style={styles.coordField}>
-              <Text style={styles.coordLabel}>Longitude</Text>
+              <Text style={styles.coordLabel}>{t('Longitude')}</Text>
               <TextInput
                 style={styles.coordInput}
                 value={longitude}
@@ -442,9 +458,9 @@ export default function CollectScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>House Details</Text>
+          <Text style={styles.sectionLabel}>{t('House Details')}</Text>
 
-          <Text style={styles.fieldLabel}>House Type</Text>
+          <Text style={styles.fieldLabel}>{t('House Type')}</Text>
           <View style={styles.toggleRow}>
             {HOUSE_TYPES.map((type) => (
               <Pressable
@@ -458,7 +474,7 @@ export default function CollectScreen() {
                   color={houseType === type ? Colors.textPrimary : Colors.midGray}
                 />
                 <Text style={[styles.toggleText, houseType === type && styles.toggleTextActive]}>
-                  {type}
+                  {t(type)}
                 </Text>
               </Pressable>
             ))}
@@ -466,24 +482,24 @@ export default function CollectScreen() {
 
           {houseType === 'APARTMENT' && (
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Unit ID</Text>
+              <Text style={styles.fieldLabel}>{t('Unit ID')}</Text>
               <TextInput
                 style={styles.textInput}
                 value={unitId}
                 onChangeText={setUnitId}
-                placeholder="Enter Unit UUID"
+                placeholder={t('Enter Unit UUID')}
                 placeholderTextColor={Colors.midGray}
               />
             </View>
           )}
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Address</Text>
+            <Text style={styles.fieldLabel}>{t('Address')}</Text>
             <TextInput
               style={[styles.textInput, styles.multiline]}
               value={addressText}
               onChangeText={setAddressText}
-              placeholder="House number, street, area..."
+              placeholder={t('House number, street, area...')}
               placeholderTextColor={Colors.midGray}
               multiline
               numberOfLines={2}
@@ -493,9 +509,9 @@ export default function CollectScreen() {
           <View style={styles.fieldGroup}>
             <View style={styles.sectionRow}>
               <View>
-                <Text style={styles.fieldLabel}>Landmark Images</Text>
+                <Text style={styles.fieldLabel}>{t('Landmark Images')}</Text>
                 <Text style={styles.photoHint}>
-                  Capture or choose up to {MAX_LANDMARK_IMAGES} photos for this household.
+                  {t('Capture or choose up to {{count}} photos for this household.', { count: MAX_LANDMARK_IMAGES })}
                 </Text>
               </View>
               <View style={styles.photoMeta}>
@@ -507,17 +523,17 @@ export default function CollectScreen() {
             <View style={styles.photoActions}>
               <Pressable onPress={() => void openCamera()} style={styles.photoAction}>
                 <Ionicons name="camera" size={18} color={Colors.primary} />
-                <Text style={styles.photoActionText}>Take Photo</Text>
+                <Text style={styles.photoActionText}>{t('Take Photo')}</Text>
               </Pressable>
               <Pressable onPress={() => void openGallery()} style={styles.photoAction}>
                 <Ionicons name="images" size={18} color={Colors.primary} />
-                <Text style={styles.photoActionText}>Choose Photos</Text>
+                <Text style={styles.photoActionText}>{t('Choose Photos')}</Text>
               </Pressable>
             </View>
 
             <LandmarkImageGallery
               images={landmarkImages.map((image) => ({ uri: image.uri }))}
-              emptyText="No landmark images selected. Add at least one image before submitting."
+              emptyText={t('No landmark images selected. Add at least one image before submitting.')}
               onRemove={removeLandmarkImage}
             />
           </View>
@@ -526,14 +542,14 @@ export default function CollectScreen() {
         <View style={styles.card}>
           <View style={styles.personsHeader}>
             <View>
-              <Text style={styles.sectionLabel}>Persons</Text>
+              <Text style={styles.sectionLabel}>{t('Persons')}</Text>
               <Text style={styles.personsCount}>
-                {persons.length} person{persons.length !== 1 ? 's' : ''} Ãƒâ€šÃ‚Â· {voterCount} voter{voterCount !== 1 ? 's' : ''}
+                {persons.length} {t(persons.length === 1 ? 'person' : 'persons')} - {voterCount} {t(voterCount === 1 ? 'voter' : 'voters')}
               </Text>
             </View>
             <Pressable onPress={addPerson} style={styles.addPersonBtn}>
               <Ionicons name="person-add-outline" size={16} color={Colors.primary} />
-              <Text style={styles.addPersonText}>Add</Text>
+              <Text style={styles.addPersonText}>{t('Add')}</Text>
             </Pressable>
           </View>
 
@@ -543,7 +559,7 @@ export default function CollectScreen() {
                 <View style={styles.personNumBadge}>
                   <Text style={styles.personNum}>{idx + 1}</Text>
                 </View>
-                <Text style={styles.personTitle}>Person {idx + 1}</Text>
+                <Text style={styles.personTitle}>{t('Person')} {idx + 1}</Text>
                 {persons.length > 1 && (
                   <Pressable onPress={() => removePerson(idx)}>
                     <Ionicons name="close-circle" size={20} color={Colors.error} />
@@ -552,12 +568,12 @@ export default function CollectScreen() {
               </View>
 
               <View style={[styles.fieldGroup, { marginBottom: Spacing.sm }]}>
-                <Text style={styles.fieldLabel}>Name (optional)</Text>
+                <Text style={styles.fieldLabel}>{t('Name (optional)')}</Text>
                 <TextInput
                   style={styles.textInput}
                   value={person.name}
                   onChangeText={(value) => updatePerson(idx, 'name', value)}
-                  placeholder="Enter person name"
+                  placeholder={t('Enter person name')}
                   placeholderTextColor={Colors.midGray}
                   maxLength={120}
                 />
@@ -565,11 +581,11 @@ export default function CollectScreen() {
 
               <View style={styles.personRow}>
                 <View style={[styles.fieldGroup, { flex: 1, marginRight: Spacing.sm }]}>
-                  <Text style={styles.fieldLabel}>Age</Text>
+                  <Text style={styles.fieldLabel}>{t('Age')}</Text>
                   <TextInput
                     style={styles.textInput}
                     value={person.age}
-                    onChangeText={(value) => updatePerson(idx, 'age', value)}
+                    onChangeText={(value) => handleAgeChange(idx, value)}
                     keyboardType="numeric"
                     placeholder="-"
                     placeholderTextColor={Colors.midGray}
@@ -577,7 +593,7 @@ export default function CollectScreen() {
                   />
                 </View>
                 <View style={[styles.fieldGroup, { flex: 2 }]}>
-                  <Text style={styles.fieldLabel}>Gender</Text>
+                  <Text style={styles.fieldLabel}>{t('Gender')}</Text>
                   <View style={styles.genderRow}>
                     {GENDERS.map((gender) => (
                       <Pressable
@@ -586,7 +602,7 @@ export default function CollectScreen() {
                         style={[styles.genderBtn, person.gender === gender && styles.genderBtnActive]}
                       >
                         <Text style={[styles.genderText, person.gender === gender && styles.genderTextActive]}>
-                          {gender[0]}
+                          {t(gender[0])}
                         </Text>
                       </Pressable>
                     ))}
@@ -594,17 +610,28 @@ export default function CollectScreen() {
                 </View>
               </View>
 
-              <View style={styles.voterRow}>
+              <View style={styles.voterStatusRow}>
                 <View>
-                  <Text style={styles.fieldLabel}>Voter</Text>
-                  <Text style={styles.voterSub}>Registered voter?</Text>
+                  <Text style={styles.fieldLabel}>{t('Voter Status')}</Text>
+                  <Text style={styles.voterSub}>
+                    {person.age 
+                      ? (parseInt(person.age, 10) >= 18 
+                        ? t('Eligible (18+ years)')
+                        : t('Not eligible (under 18)'))
+                      : t('Enter age to determine eligibility')}
+                  </Text>
                 </View>
-                <Switch
-                  value={person.is_voter}
-                  onValueChange={(value) => updatePerson(idx, 'is_voter', value)}
-                  trackColor={{ false: Colors.border, true: Colors.primaryDark }}
-                  thumbColor={person.is_voter ? Colors.primary : Colors.midGray}
-                />
+                <View style={[
+                  styles.voterBadge, 
+                  person.is_voter ? styles.voterBadgeActive : styles.voterBadgeInactive
+                ]}>
+                  <Text style={[
+                    styles.voterBadgeText,
+                    person.is_voter ? styles.voterBadgeTextActive : styles.voterBadgeTextInactive
+                  ]}>
+                    {person.is_voter ? t('YES') : t('NO')}
+                  </Text>
+                </View>
               </View>
             </View>
           ))}
@@ -612,7 +639,7 @@ export default function CollectScreen() {
 
         <View style={styles.submitWrap}>
           <ThemedButton
-            title={submitting ? 'Submitting...' : 'Submit Household'}
+            title={submitting ? t('Submitting...') : t('Submit Household')}
             onPress={handleSubmit}
             loading={submitting}
             fullWidth
@@ -621,7 +648,7 @@ export default function CollectScreen() {
             style={Shadows.button}
           />
           <Text style={styles.submitHint}>
-            {landmarkImages.length} image{landmarkImages.length !== 1 ? 's' : ''} Ãƒâ€šÃ‚Â· {voterCount} voter{voterCount !== 1 ? 's' : ''} in {persons.length} person{persons.length !== 1 ? 's' : ''}
+            {landmarkImages.length} {t(landmarkImages.length === 1 ? 'image' : 'images')} - {voterCount} {t(voterCount === 1 ? 'voter' : 'voters')} {t('in')} {persons.length} {t(persons.length === 1 ? 'person' : 'persons')}
           </Text>
         </View>
       </ScrollView>
@@ -869,7 +896,7 @@ const styles = StyleSheet.create({
   genderBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   genderText: { fontSize: FontSizes.sm, fontWeight: '800', color: Colors.midGray },
   genderTextActive: { color: Colors.textPrimary },
-  voterRow: {
+  voterStatusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -879,6 +906,18 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   voterSub: { fontSize: FontSizes.xs, color: Colors.textMuted, marginTop: 2 },
+  voterBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  voterBadgeActive: { backgroundColor: Colors.successMuted },
+  voterBadgeInactive: { backgroundColor: Colors.bgCard },
+  voterBadgeText: { fontSize: FontSizes.xs, fontWeight: '800' },
+  voterBadgeTextActive: { color: Colors.success },
+  voterBadgeTextInactive: { color: Colors.midGray },
   submitWrap: { padding: Spacing.xl, paddingTop: Spacing.lg },
   submitHint: {
     textAlign: 'center',
@@ -887,4 +926,3 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
 });
-

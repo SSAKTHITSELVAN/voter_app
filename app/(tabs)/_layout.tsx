@@ -3,18 +3,20 @@ import { AuthStore } from '@/lib/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 // ─── Clean icon config using theme constants ─────────────────────────────────
 const ICONS = {
-  households: { active: 'location',                inactive: 'location-outline',                label: 'Nearby',   accent: Colors.primary     },
-  verify:     { active: 'checkmark-done-circle',   inactive: 'checkmark-done-circle-outline',   label: 'Verify',   accent: Colors.success     },
-  bulk:       { active: 'layers',                  inactive: 'layers-outline',                  label: 'Bulk',     accent: Colors.info        },
-  profile:    { active: 'person-circle',           inactive: 'person-circle-outline',           label: 'Profile',  accent: Colors.warning     },
-  admin:      { active: 'shield',                  inactive: 'shield-outline',                  label: 'Admin',    accent: Colors.gold        },
+  households: { active: 'location', inactive: 'location-outline', key: 'nearby', accent: Colors.primary },
+  verify: { active: 'checkmark-done-circle', inactive: 'checkmark-done-circle-outline', key: 'verify', accent: Colors.success },
+  bulk: { active: 'layers', inactive: 'layers-outline', key: 'bulk', accent: Colors.info },
+  profile: { active: 'person-circle', inactive: 'person-circle-outline', key: 'profile', accent: Colors.warning },
+  admin: { active: 'shield', inactive: 'shield-outline', key: 'admin', accent: Colors.gold },
 } as const;
 
 // ─── Simple tab icon with modern styling ─────────────────────────────────────
 function TabIcon({ route, focused }: { route: keyof typeof ICONS; focused: boolean }) {
+  const { t } = useTranslation();
   const cfg = ICONS[route];
   return (
     <View style={[styles.tabItem, focused && styles.tabItemFocused]}>
@@ -53,7 +55,7 @@ function TabIcon({ route, focused }: { route: keyof typeof ICONS; focused: boole
         { color: focused ? cfg.accent : Colors.textMuted },
         focused && styles.labelActive
       ]}>
-        {cfg.label}
+        {t(cfg.key)}
       </Text>
     </View>
   );
@@ -77,15 +79,6 @@ function CollectFab({ focused }: { focused: boolean }) {
           color={Colors.white}
         />
       </View>
-      <Text style={[
-        styles.fabLabel,
-        focused && {
-          color: Colors.primary,
-          fontWeight: '700'
-        }
-      ]}>
-        Collect
-      </Text>
     </View>
   );
 }
@@ -98,11 +91,11 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown:             false,
-        tabBarShowLabel:         false,
-        tabBarStyle:             styles.bar,
-        tabBarItemStyle:         styles.barItem,
-        tabBarActiveTintColor:   Colors.primary,
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarStyle: styles.bar,
+        tabBarItemStyle: styles.barItem,
+        tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
       }}
     >
@@ -132,8 +125,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="admin/index"
         options={{
-          href:        isAdmin ? undefined : null,
-          tabBarIcon:  ({ focused }) => <TabIcon route="admin" focused={focused} />,
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ focused }) => <TabIcon route="admin" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -145,94 +138,92 @@ export default function TabLayout() {
 }
 
 // ─── Modern styles using theme constants ─────────────────────────────────────
-const BAR_H   = Platform.OS === 'ios' ? 82 : 64;
-const FAB_D   = 56;
-const FAB_LIFT = 18;
+const BAR_H = Platform.OS === 'ios' ? 100 : 82;
+const FAB_D = 56;
+const FAB_LIFT = 48;
 
 const styles = StyleSheet.create({
   bar: {
     backgroundColor: Colors.bgCard,
-    borderTopWidth:  1,
-    borderTopColor:  Colors.border,
-    height:          BAR_H + FAB_LIFT,
-    paddingBottom:   Platform.OS === 'ios' ? 20 : 6,
-    paddingTop:      FAB_LIFT,
-    overflow:        'visible',
-    shadowColor:     Colors.black,
-    shadowOffset:    { width: 0, height: -4 },
-    shadowOpacity:   0.1,
-    shadowRadius:    8,
-    elevation:       12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    height: BAR_H,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 6,
+    paddingTop: 6,
+    overflow: 'visible',
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 12,
   },
   barItem: {
-    paddingTop:    0,
+    paddingTop: 0,
     paddingBottom: 0,
-    overflow:      'visible',
+    overflow: 'visible',
   },
   tabItem: {
-    alignItems:     'center',
+    alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop:     4,
-    gap:            3,
-    minWidth:       52,
+    paddingTop: 4,
+    gap: 3,
+    minWidth: 52,
   },
-  tabItemFocused: {
-    // Clean focused state without transforms
-  },
+  tabItemFocused: {},
   activeLine: {
-    width:           28,
-    height:          3,
-    borderRadius:    2,
+    width: 28,
+    height: 3,
+    borderRadius: 2,
     backgroundColor: 'transparent',
-    marginBottom:    2,
+    marginBottom: 2,
   },
   iconPill: {
-    width:           44,
-    height:          28,
-    borderRadius:    Radius.md,
-    alignItems:      'center',
-    justifyContent:  'center',
+    width: 44,
+    height: 28,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.white05,
   },
   label: {
-    fontSize:      9,
-    fontWeight:    '600',
+    fontSize: 9,
+    fontWeight: '600',
     letterSpacing: 0.3,
   },
   labelActive: {
     fontWeight: '700',
   },
   fabItemSlot: {
-    overflow:      'visible',
-    paddingTop:    0,
+    position: 'absolute',
+    top: -FAB_LIFT,
+    left: '50%',
+    marginLeft: -(FAB_D / 2),
+    width: FAB_D,
+    height: FAB_D,
+    overflow: 'visible',
+    paddingTop: 0,
     paddingBottom: 0,
-    justifyContent: 'flex-start',
-    alignItems:     'center',
+    zIndex: 100,
   },
   fabContainer: {
-    alignItems:  'center',
-    marginTop:   -(FAB_LIFT + FAB_D / 2),
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: FAB_D,
+    height: FAB_D,
   },
   fab: {
-    width:           FAB_D,
-    height:          FAB_D,
-    borderRadius:    FAB_D / 2,
+    width: FAB_D,
+    height: FAB_D,
+    borderRadius: FAB_D / 2,
     backgroundColor: Colors.primary,
-    alignItems:      'center',
-    justifyContent:  'center',
-    borderWidth:     3,
-    borderColor:     Colors.bgCard,
-    shadowColor:     Colors.primary,
-    shadowOffset:    { width: 0, height: 6 },
-    shadowOpacity:   0.4,
-    shadowRadius:    12,
-    elevation:       18,
-  },
-  fabLabel: {
-    fontSize:      9,
-    fontWeight:    '600',
-    color:         Colors.textMuted,
-    marginTop:     5,
-    letterSpacing: 0.3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: Colors.bgCard,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 18,
   },
 });

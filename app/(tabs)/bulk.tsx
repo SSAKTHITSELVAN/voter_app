@@ -1,4 +1,6 @@
 import React, { useRef, useState } from 'react';
+import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -54,23 +56,22 @@ type ResultState = {
 } | null;
 
 export default function BulkScreen() {
+  const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
   const [drafts, setDrafts] = useState<DraftHousehold[]>([newDraft()]);
   const [gpsLoading, setGpsLoading] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
 
-  // Inline error banner
   const [errorMsg, setErrorMsg] = useState('');
 
-  // â”€â”€ GPS per draft â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function getGpsForDraft(id: string) {
     setGpsLoading(id);
     setErrorMsg('');
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Location permission required to get GPS coordinates.');
+        setErrorMsg(t('Location permission is required to find nearby households.'));
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -80,7 +81,7 @@ export default function BulkScreen() {
         gpsAcquired: true,
       });
     } catch {
-      setErrorMsg('Could not acquire GPS. Please try again or enter coordinates manually.');
+      setErrorMsg(t('Could not get location. Please try again.'));
     } finally {
       setGpsLoading(null);
     }
@@ -112,7 +113,7 @@ export default function BulkScreen() {
 
   function addDraft() {
     if (drafts.length >= 50) {
-      Alert.alert('Limit', 'Maximum 50 households per batch.');
+      Alert.alert(t('Limit'), t('Maximum 50 households per batch.'));
       return;
     }
     setDrafts(prev => [...prev, newDraft()]);
@@ -126,11 +127,10 @@ export default function BulkScreen() {
   async function handleSubmit() {
     setErrorMsg('');
 
-    // Validate â€” find first missing GPS
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
       if (!d.latitude || !d.longitude) {
-        setErrorMsg(`Household #${i + 1} is missing GPS coordinates. Tap "Get GPS" on that card.`);
+        setErrorMsg(t('Household #{{num}} is missing GPS coordinates. Tap "Get GPS" on that card.', { num: i + 1 }));
         scrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
@@ -154,20 +154,18 @@ export default function BulkScreen() {
 
       const res = await householdsApi.bulk(payload);
       setResult(res);
-      // Only reset drafts if at least one was created
       if (res.created > 0) {
         setDrafts([newDraft()]);
       }
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      setErrorMsg(err.message ?? 'Upload failed. Please check your connection and try again.');
+      setErrorMsg(err.message ?? t('Upload failed. Please check your connection and try again.'));
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSubmitting(false);
     }
   }
 
-  // â”€â”€ Result Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (result) {
     const allGood = result.errors.length === 0;
     const hasSkipped = result.duplicates_skipped > 0;
@@ -181,7 +179,7 @@ export default function BulkScreen() {
             <View style={styles.headerIconWrap}>
               <Ionicons name="cloud-upload" size={26} color={Colors.textPrimary} />
             </View>
-            <Text style={styles.title}>Bulk Upload</Text>
+            <Text style={styles.title}>{t('Bulk Upload')}</Text>
           </View>
         </View>
 
@@ -192,21 +190,20 @@ export default function BulkScreen() {
               size={64}
               color={allGood ? Colors.success : Colors.warning}
             />
-            <Text style={styles.resultTitle}>Upload Complete</Text>
+            <Text style={styles.resultTitle}>{t('Upload Complete')}</Text>
 
             <View style={styles.resultGrid}>
-              <ResultStat label="Total Sent"    value={result.total}                 color={Colors.info}    />
-              <ResultStat label="Created"       value={result.created}               color={Colors.success} />
-              <ResultStat label="Duplicates"    value={result.duplicates_skipped}    color={Colors.warning} />
-              <ResultStat label="Errors"        value={result.errors.length}         color={Colors.error}   />
+              <ResultStat label={t('Total Sent')} value={result.total} color={Colors.info} />
+              <ResultStat label={t('Created')} value={result.created} color={Colors.success} />
+              <ResultStat label={t('Duplicates')} value={result.duplicates_skipped} color={Colors.warning} />
+              <ResultStat label={t('Errors')} value={result.errors.length} color={Colors.error} />
             </View>
 
-            {/* Informational messages */}
             {result.created > 0 && (
               <View style={styles.resultMsg}>
                 <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
                 <Text style={[styles.resultMsgText, { color: Colors.success }]}>
-                  {result.created} household{result.created !== 1 ? 's' : ''} recorded successfully.
+                  {t(result.created === 1 ? '{{count}} household recorded successfully.' : '{{count}} households recorded successfully.', { count: result.created })}
                 </Text>
               </View>
             )}
@@ -214,7 +211,7 @@ export default function BulkScreen() {
               <View style={styles.resultMsg}>
                 <Ionicons name="copy-outline" size={16} color={Colors.warning} />
                 <Text style={[styles.resultMsgText, { color: Colors.warning }]}>
-                  {result.duplicates_skipped} skipped â€” already exist within 20m of an existing household.
+                  {t('{{count}} skipped — already exist within 20m of an existing household.', { count: result.duplicates_skipped })}
                 </Text>
               </View>
             )}
@@ -222,16 +219,15 @@ export default function BulkScreen() {
               <View style={styles.resultMsg}>
                 <Ionicons name="information-circle" size={16} color={Colors.info} />
                 <Text style={[styles.resultMsgText, { color: Colors.info }]}>
-                  All submitted households were duplicates. No new records were created.
+                  {t('All submitted households were duplicates. No new records were created.')}
                 </Text>
               </View>
             )}
 
-            {/* Error list */}
             {result.errors.length > 0 && (
               <View style={styles.errorList}>
                 <Text style={styles.errorTitle}>
-                  âš ï¸ {result.errors.length} Error{result.errors.length !== 1 ? 's' : ''}
+                  {t(result.errors.length === 1 ? '{{count}} Error' : '{{count}} Errors', { count: result.errors.length })}
                 </Text>
                 {result.errors.map(e => (
                   <View key={e.index} style={styles.errorItem}>
@@ -243,7 +239,7 @@ export default function BulkScreen() {
             )}
 
             <ThemedButton
-              title="Upload More"
+              title={t('Upload More')}
               onPress={() => { setResult(null); setDrafts([newDraft()]); }}
               fullWidth
               size="lg"
@@ -255,20 +251,22 @@ export default function BulkScreen() {
     );
   }
 
-  // â”€â”€ Main Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
         <View style={styles.headerDecorLeft} />
         <View style={styles.headerDecorRight} />
-        <View style={styles.headerContent}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="cloud-upload" size={26} color={Colors.textPrimary} />
+        <View style={[styles.headerContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}> 
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="cloud-upload" size={26} color={Colors.textPrimary} />
+            </View>
+            <View>
+              <Text style={styles.title}>{t('Bulk Upload')}</Text>
+              <Text style={styles.subtitle}>{t('Sync offline-collected households')}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.title}>Bulk Upload</Text>
-            <Text style={styles.subtitle}>Sync offline-collected households</Text>
-          </View>
+          <HeaderLanguageSwitcher />
         </View>
       </View>
 
@@ -279,7 +277,6 @@ export default function BulkScreen() {
           keyboardShouldPersistTaps="handled"
         >
 
-          {/* â”€â”€ Inline error banner â”€â”€ */}
           {!!errorMsg && (
             <View style={styles.errorBanner}>
               <Ionicons name="alert-circle" size={16} color={Colors.error} />
@@ -293,18 +290,17 @@ export default function BulkScreen() {
           <View style={styles.infoBar}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.info} />
             <Text style={styles.infoText}>
-              {drafts.length} household{drafts.length !== 1 ? 's' : ''} queued Â· Duplicates within 20m are auto-skipped
+              {drafts.length} {t(drafts.length === 1 ? 'household' : 'households')} {t('queued')} · {t('Duplicates within 20m are auto-skipped')}
             </Text>
           </View>
 
           {drafts.map((draft, dIdx) => (
             <View key={draft.id} style={styles.draftCard}>
-              {/* Draft header */}
               <View style={styles.draftHeader}>
                 <View style={styles.draftNumBadge}>
                   <Text style={styles.draftNum}>{dIdx + 1}</Text>
                 </View>
-                <Text style={styles.draftTitle}>Household #{dIdx + 1}</Text>
+                <Text style={styles.draftTitle}>{t('Household')} #{dIdx + 1}</Text>
                 {drafts.length > 1 && (
                   <Pressable onPress={() => removeDraft(draft.id)}>
                     <Ionicons name="trash-outline" size={18} color={Colors.error} />
@@ -312,7 +308,6 @@ export default function BulkScreen() {
                 )}
               </View>
 
-              {/* GPS row */}
               <View style={[styles.gpsRow, draft.gpsAcquired && styles.gpsRowDone]}>
                 <Ionicons
                   name="navigate"
@@ -324,7 +319,7 @@ export default function BulkScreen() {
                     {parseFloat(draft.latitude).toFixed(5)}, {parseFloat(draft.longitude).toFixed(5)}
                   </Text>
                 ) : (
-                  <Text style={styles.gpsEmpty}>No location set</Text>
+                  <Text style={styles.gpsEmpty}>{t('No location set')}</Text>
                 )}
                 <Pressable
                   onPress={() => getGpsForDraft(draft.id)}
@@ -332,44 +327,41 @@ export default function BulkScreen() {
                   disabled={gpsLoading === draft.id}
                 >
                   <Text style={styles.gpsBtnText}>
-                    {gpsLoading === draft.id ? 'Locatingâ€¦' : draft.gpsAcquired ? 'Refresh' : 'Get GPS'}
+                    {gpsLoading === draft.id ? t('Locating...') : draft.gpsAcquired ? t('Refresh') : t('Get GPS')}
                   </Text>
                 </Pressable>
               </View>
 
-              {/* Address */}
               <TextInput
                 style={styles.addressInput}
                 value={draft.address_text}
                 onChangeText={v => updateDraft(draft.id, { address_text: v })}
-                placeholder="Address (optional)"
+                placeholder={t('Address (optional)')}
                 placeholderTextColor={Colors.midGray}
               />
 
-              {/* House Type */}
               <View style={styles.typeRow}>
-                {(['INDIVIDUAL', 'APARTMENT'] as HouseType[]).map(t => (
+                {(['INDIVIDUAL', 'APARTMENT'] as HouseType[]).map(type => (
                   <Pressable
-                    key={t}
-                    onPress={() => updateDraft(draft.id, { house_type: t })}
-                    style={[styles.typeBtn, draft.house_type === t && styles.typeBtnActive]}
+                    key={type}
+                    onPress={() => updateDraft(draft.id, { house_type: type })}
+                    style={[styles.typeBtn, draft.house_type === type && styles.typeBtnActive]}
                   >
-                    <Text style={[styles.typeBtnText, draft.house_type === t && styles.typeBtnTextActive]}>
-                      {t}
+                    <Text style={[styles.typeBtnText, draft.house_type === type && styles.typeBtnTextActive]}>
+                      {t(type)}
                     </Text>
                   </Pressable>
                 ))}
               </View>
 
-              {/* Persons */}
               <View style={styles.personsSection}>
                 <View style={styles.personsTop}>
                   <Text style={styles.personsLabel}>
-                    Persons ({draft.persons.length}) Â· {draft.persons.filter(p => p.is_voter).length} voter{draft.persons.filter(p => p.is_voter).length !== 1 ? 's' : ''}
+                    {t('Persons')} ({draft.persons.length}) · {draft.persons.filter(p => p.is_voter).length} {t(draft.persons.filter(p => p.is_voter).length === 1 ? 'voter' : 'voters')}
                   </Text>
                   <Pressable onPress={() => addPerson(draft.id)} style={styles.addPersonBtn}>
                     <Ionicons name="add" size={14} color={Colors.primary} />
-                    <Text style={styles.addPersonText}>Add</Text>
+                    <Text style={styles.addPersonText}>{t('Add')}</Text>
                   </Pressable>
                 </View>
                 {draft.persons.map((p, pIdx) => (
@@ -378,7 +370,7 @@ export default function BulkScreen() {
                       style={styles.ageInput}
                       value={p.age}
                       onChangeText={v => updatePerson(draft.id, pIdx, { age: v })}
-                      placeholder="Age"
+                      placeholder={t('Age')}
                       placeholderTextColor={Colors.midGray}
                       keyboardType="numeric"
                       maxLength={3}
@@ -391,7 +383,7 @@ export default function BulkScreen() {
                           onPress={() => updatePerson(draft.id, pIdx, { gender: full })}
                           style={[styles.genderBtn, p.gender === full && styles.genderBtnActive]}
                         >
-                          <Text style={[styles.genderText, p.gender === full && styles.genderTextActive]}>{g}</Text>
+                          <Text style={[styles.genderText, p.gender === full && styles.genderTextActive]}>{t(g)}</Text>
                         </Pressable>
                       );
                     })}
@@ -405,7 +397,7 @@ export default function BulkScreen() {
                         color={p.is_voter ? Colors.textPrimary : Colors.midGray}
                       />
                       <Text style={[styles.voterBtnText, p.is_voter && styles.voterBtnTextActive]}>
-                        {p.is_voter ? 'Voter' : 'Non'}
+                        {p.is_voter ? t('Voter') : t('Non')}
                       </Text>
                     </Pressable>
                     {draft.persons.length > 1 && (
@@ -419,15 +411,13 @@ export default function BulkScreen() {
             </View>
           ))}
 
-          {/* Add more */}
           <Pressable onPress={addDraft} style={styles.addDraftBtn}>
             <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
-            <Text style={styles.addDraftText}>Add Another Household</Text>
+            <Text style={styles.addDraftText}>{t('Add Another Household')}</Text>
           </Pressable>
 
-          {/* Submit */}
           <ThemedButton
-            title={submitting ? 'Uploadingâ€¦' : `Upload ${drafts.length} Household${drafts.length !== 1 ? 's' : ''}`}
+            title={submitting ? t('Uploading...') : t(drafts.length === 1 ? 'Upload {{count}} Household' : 'Upload {{count}} Households', { count: drafts.length })}
             onPress={handleSubmit}
             loading={submitting}
             fullWidth
@@ -476,7 +466,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FontSizes.xs, color: Colors.white60, marginTop: 2 },
   container: { padding: Spacing.md, paddingBottom: 56 },
 
-  // Inline error banner
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#200D0D', borderRadius: Radius.md,
@@ -587,7 +576,6 @@ const styles = StyleSheet.create({
   },
   addDraftText: { fontSize: FontSizes.sm, color: Colors.primary, fontWeight: '600' },
 
-  // Result screen
   resultContainer: { padding: Spacing.md, paddingBottom: 48 },
   resultCard: {
     backgroundColor: Colors.bgCard, borderRadius: Radius.lg,

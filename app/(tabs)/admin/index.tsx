@@ -233,7 +233,7 @@ function CreateUser({ role, onCreated }: { role: string; onCreated: () => void }
         password,
         role: selectedRole,
       });
-      Alert.alert('✅ Created', `${name} has been added as ${selectedRole}.`, [
+      Alert.alert('Created', `${name} has been added as ${selectedRole}.`, [
         { text: 'OK', onPress: () => {
           setName(''); setPhone(''); setPassword('');
           onCreated();

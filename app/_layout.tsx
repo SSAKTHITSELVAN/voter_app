@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
 import { AuthStore } from '@/lib/auth';
+import '../lib/i18n';
 
 export default function RootLayout() {
   const router = useRouter();

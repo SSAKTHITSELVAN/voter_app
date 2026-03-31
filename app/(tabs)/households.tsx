@@ -17,10 +17,12 @@ import { ThemedButton } from '@/components/ThemedButton';
 import { Colors, FontSizes, Radius, Spacing } from '@/constants/theme';
 import { householdsApi, resolveApiUrl } from '@/lib/api';
 import { Household, HouseholdBrief } from '@/lib/types';
+import HeaderLanguageSwitcher from '@/components/HeaderLanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const RADII = [100, 250, 500, 1000, 5000];
-
 export default function HouseholdsScreen() {
+  const { t } = useTranslation();
   const [households, setHouseholds] = useState<HouseholdBrief[]>([]);
   const [loading, setLoading] = useState(false);
   const [radius, setRadius] = useState(500);
@@ -34,7 +36,7 @@ export default function HouseholdsScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Location is needed to find nearby households.');
+        Alert.alert(t('Permission denied'), t('Location is needed to find nearby households.'));
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -48,11 +50,11 @@ export default function HouseholdsScreen() {
       );
       setHouseholds(results);
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'Could not load households.');
+      Alert.alert(t('Error'), err.message ?? t('Could not load households.'));
     } finally {
       setLoading(false);
     }
-  }, [radius]);
+  }, [radius, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,7 +68,7 @@ export default function HouseholdsScreen() {
       const household = await householdsApi.get(id);
       setSelected(household);
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'Could not load household details.');
+      Alert.alert(t('Error'), err.message ?? t('Could not load household details.'));
     } finally {
       setDetailLoading(false);
     }
@@ -81,24 +83,27 @@ export default function HouseholdsScreen() {
       <View style={styles.header}>
         <View style={styles.headerDecorLeft} />
         <View style={styles.headerDecorRight} />
-        <View style={styles.headerContent}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="home" size={26} color={Colors.textPrimary} />
+        <View style={[styles.headerContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}> 
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="home" size={26} color={Colors.textPrimary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>{t('Nearby Households')}</Text>
+              {myLat !== null ? (
+                <Text style={styles.subtitle}>{myLat.toFixed(4)}, {myLon?.toFixed(4)}</Text>
+              ) : null}
+            </View>
+            <Pressable onPress={() => void fetchNearby()} style={styles.refreshHeaderBtn} disabled={loading}>
+              <Ionicons name="refresh" size={20} color={loading ? Colors.white20 : Colors.textPrimary} />
+            </Pressable>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Nearby Households</Text>
-            {myLat !== null ? (
-              <Text style={styles.subtitle}>{myLat.toFixed(4)}, {myLon?.toFixed(4)}</Text>
-            ) : null}
-          </View>
-          <Pressable onPress={() => void fetchNearby()} style={styles.refreshHeaderBtn} disabled={loading}>
-            <Ionicons name="refresh" size={20} color={loading ? Colors.white20 : Colors.textPrimary} />
-          </Pressable>
+          <HeaderLanguageSwitcher />
         </View>
       </View>
 
       <View style={styles.radiusRow}>
-        <Text style={styles.radiusLabel}>Radius:</Text>
+        <Text style={styles.radiusLabel}>{t('Radius:')}</Text>
         {RADII.map((value) => (
           <Pressable
             key={value}
@@ -115,7 +120,7 @@ export default function HouseholdsScreen() {
       {loading || detailLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={styles.loadingText}>Finding households...</Text>
+          <Text style={styles.loadingText}>{t('Finding households...')}</Text>
         </View>
       ) : (
         <FlatList
@@ -129,15 +134,15 @@ export default function HouseholdsScreen() {
             <View style={styles.empty}>
               <Ionicons name="home-outline" size={48} color={Colors.border} />
               <Text style={styles.emptyText}>
-                No households found within {radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}
+                {t('No households found within {{radius}}m', { radius: radius >= 1000 ? radius / 1000 + 'km' : radius })}
               </Text>
-              <ThemedButton title="Refresh" onPress={() => void fetchNearby()} variant="outline" size="sm" style={{ marginTop: 16 }} />
+              <ThemedButton title={t('Refresh')} onPress={() => void fetchNearby()} variant="outline" size="sm" style={{ marginTop: 16 }} />
             </View>
           }
           ListHeaderComponent={
             households.length > 0 ? (
               <Text style={styles.countText}>
-                {households.length} household{households.length !== 1 ? 's' : ''} found
+                {t(households.length === 1 ? '{{count}} household found' : '{{count}} households found', { count: households.length })}
               </Text>
             ) : null
           }
@@ -148,6 +153,7 @@ export default function HouseholdsScreen() {
 }
 
 function HouseholdDetail({ household, onBack }: { household: Household; onBack: () => void }) {
+  const { t } = useTranslation();
   const voterCount = household.persons.filter((person) => person.is_voter).length;
   const galleryImages = household.landmark_images.map((image) => ({
     id: image.id,
@@ -160,7 +166,7 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
         <Pressable onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
         </Pressable>
-        <Text style={styles.detailTitle}>Household Details</Text>
+        <Text style={styles.detailTitle}>{t('Household Details')}</Text>
       </View>
 
       <FlatList
@@ -186,45 +192,45 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
                   { color: household.house_type === 'APARTMENT' ? Colors.gold : Colors.primary },
                 ]}
               >
-                {household.house_type}
+                {t(household.house_type)}
               </Text>
             </View>
 
             <View style={styles.detailCard}>
-              <Row icon="location-outline" label="Address" value={household.address_text ?? 'N/A'} />
+              <Row icon="location-outline" label={t('Address')} value={household.address_text ?? t('No address')} />
               <Row
                 icon="navigate-outline"
-                label="Coordinates"
+                label={t('Coordinates')}
                 value={`${household.latitude.toFixed(6)}, ${household.longitude.toFixed(6)}`}
                 mono
               />
               <Row
                 icon="calendar-outline"
-                label="Recorded On"
+                label={t('Recorded On')}
                 value={new Date(household.created_at).toLocaleString('en-IN')}
               />
             </View>
 
             <View style={styles.gallerySection}>
               <View style={styles.galleryHeader}>
-                <Text style={styles.galleryTitle}>Landmark Images</Text>
+                <Text style={styles.galleryTitle}>{t('Landmark Images')}</Text>
                 <Text style={styles.galleryCount}>
-                  {household.landmark_images.length} image{household.landmark_images.length !== 1 ? 's' : ''}
+                  {t(household.landmark_images.length === 1 ? '{{count}} image' : '{{count}} images', { count: household.landmark_images.length })}
                 </Text>
               </View>
               <LandmarkImageGallery
                 images={galleryImages}
-                emptyText="No landmark images were uploaded for this household."
+                emptyText={t('No landmark images were uploaded for this household.')}
               />
             </View>
 
             <View style={styles.statsRow}>
-              <StatMini label="Total People" value={household.persons.length} color={Colors.info} />
-              <StatMini label="Voters" value={voterCount} color={Colors.success} />
-              <StatMini label="Non-Voters" value={household.persons.length - voterCount} color={Colors.lightGray} />
+              <StatMini label={t('Total People')} value={household.persons.length} color={Colors.info} />
+              <StatMini label={t('Voters')} value={voterCount} color={Colors.success} />
+              <StatMini label={t('Non-Voters')} value={household.persons.length - voterCount} color={Colors.lightGray} />
             </View>
 
-            <Text style={styles.personsTitle}>Persons ({household.persons.length})</Text>
+            <Text style={styles.personsTitle}>{t('Persons')} ({household.persons.length})</Text>
           </>
         }
         renderItem={({ item, index }) => (
@@ -234,7 +240,7 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.personInfo}>
-                {item.name?.trim() ? item.name.trim() : ''}{item.name?.trim() ? ' | ' : ''}{item.gender ?? 'Unknown'} | Age {item.age ?? '?'}
+                {item.name?.trim() ? item.name.trim() : ''}{item.name?.trim() ? ' | ' : ''}{t(item.gender ?? 'Unknown')} | {t('Age')} {item.age ?? '?'}
               </Text>
             </View>
             <View style={[styles.voterTag, { backgroundColor: item.is_voter ? '#16382A' : Colors.darkGray }]}>
@@ -244,12 +250,12 @@ function HouseholdDetail({ household, onBack }: { household: Household; onBack: 
                 color={item.is_voter ? Colors.success : Colors.midGray}
               />
               <Text style={[styles.voterTagText, { color: item.is_voter ? Colors.success : Colors.midGray }]}>
-                {item.is_voter ? 'Voter' : 'Non-voter'}
+                {item.is_voter ? t('Voter') : t('Non-voter')}
               </Text>
             </View>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.noPerson}>No persons recorded.</Text>}
+        ListEmptyComponent={<Text style={styles.noPerson}>{t('No persons recorded.')}</Text>}
       />
     </View>
   );
@@ -455,7 +461,3 @@ const styles = StyleSheet.create({
   voterTagText: { fontSize: FontSizes.xs, fontWeight: '600' },
   noPerson: { textAlign: 'center', color: Colors.textMuted, padding: Spacing.xl },
 });
-
-
-
-
