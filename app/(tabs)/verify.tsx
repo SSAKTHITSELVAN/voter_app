@@ -48,13 +48,31 @@ export default function VerifyScreen() {
         setErrorMsg(t('Location permission is required to find nearby households.'));
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('GPS timeout')), 10000)
+      );
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ 
+          accuracy: Location.Accuracy.High,
+        }),
+        timeoutPromise
+      ]) as Awaited<ReturnType<typeof Location.getCurrentPositionAsync>>;
+      
+      // Validate GPS accuracy
+      const horizontalAccuracy = loc.coords.accuracy ?? 999;
+      if (horizontalAccuracy > 100) {
+        setErrorMsg(t('Warning: GPS accuracy is {{accuracy}}m. Results may be inaccurate.', { accuracy: Math.round(horizontalAccuracy) }));
+      }
+      
       const results = await householdsApi.nearby(loc.coords.latitude, loc.coords.longitude, 200, 20);
       setNearbyHouseholds(results);
       setStep('pick');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (err: any) {
-      setErrorMsg(err.message ?? t('Could not get location. Please try again.'));
+      const msg = err?.message?.includes('timeout')
+        ? t('GPS timeout. Ensure location is enabled and you are in an open area.')
+        : err.message ?? t('Could not get location. Please try again.');
+      setErrorMsg(msg);
     } finally {
       setGpsLoading(false);
     }

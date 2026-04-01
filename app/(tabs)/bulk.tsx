@@ -74,14 +74,32 @@ export default function BulkScreen() {
         setErrorMsg(t('Location permission is required to find nearby households.'));
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('GPS timeout')), 10000)
+      );
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ 
+          accuracy: Location.Accuracy.High,
+        }),
+        timeoutPromise
+      ]) as Awaited<ReturnType<typeof Location.getCurrentPositionAsync>>;
+      
+      // Validate GPS accuracy
+      const horizontalAccuracy = loc.coords.accuracy ?? 999;
+      if (horizontalAccuracy > 50) {
+        setErrorMsg(t('GPS accuracy is low ({{accuracy}}m). Try moving to a clearer area.', { accuracy: Math.round(horizontalAccuracy) }));
+      }
+      
       updateDraft(id, {
         latitude: loc.coords.latitude.toFixed(7),
         longitude: loc.coords.longitude.toFixed(7),
         gpsAcquired: true,
       });
-    } catch {
-      setErrorMsg(t('Could not get location. Please try again.'));
+    } catch (error: any) {
+      const msg = error?.message?.includes('timeout')
+        ? t('GPS timeout. Ensure location is enabled and you are in an open area.')
+        : t('Could not get location. Please try again.');
+      setErrorMsg(msg);
     } finally {
       setGpsLoading(null);
     }

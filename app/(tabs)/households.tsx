@@ -42,7 +42,25 @@ export default function HouseholdsScreen() {
         Alert.alert(t('Permission denied'), t('Location is needed to find nearby households.'));
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('GPS timeout')), 10000)
+      );
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ 
+          accuracy: Location.Accuracy.High,
+        }),
+        timeoutPromise
+      ]) as Awaited<ReturnType<typeof Location.getCurrentPositionAsync>>;
+      
+      // Validate GPS accuracy
+      const horizontalAccuracy = loc.coords.accuracy ?? 999;
+      if (horizontalAccuracy > 100) {
+        Alert.alert(
+          t('Warning'),
+          t('GPS accuracy is low ({{accuracy}}m). Results may be inaccurate. Please try in an open area.', { accuracy: Math.round(horizontalAccuracy) })
+        );
+      }
+      
       setMyLat(loc.coords.latitude);
       setMyLon(loc.coords.longitude);
       const results = await householdsApi.nearby(
@@ -53,7 +71,10 @@ export default function HouseholdsScreen() {
       );
       setHouseholds(results);
     } catch (err: any) {
-      Alert.alert(t('Error'), err.message ?? t('Could not load households.'));
+      const msg = err?.message?.includes('timeout')
+        ? t('GPS timeout. Ensure location is enabled and you are in an open area.')
+        : err.message ?? t('Could not load households.');
+      Alert.alert(t('Error'), msg);
     } finally {
       setLoading(false);
     }
@@ -183,6 +204,14 @@ function HouseholdDetail({
   const [deleting, setDeleting] = useState(false);
   const [deletingPersonId, setDeletingPersonId] = useState<string | null>(null);
 
+  // Person editing state
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [editPersonName, setEditPersonName] = useState('');
+  const [editPersonAge, setEditPersonAge] = useState('');
+  const [editPersonGender, setEditPersonGender] = useState<GenderType | null>(null);
+  const [savingPersonId, setSavingPersonId] = useState<string | null>(null);
+  const [addingPerson, setAddingPerson] = useState(false);
+
   // Edit form state
   const [editAddress, setEditAddress] = useState(household.address_text ?? '');
   const [editHouseType, setEditHouseType] = useState<HouseType>(household.house_type);
@@ -265,6 +294,76 @@ function HouseholdDetail({
         },
       ],
     );
+  }
+
+  function startEditPerson(person: typeof household.persons[0]) {
+    setEditingPersonId(person.id!);
+    setEditPersonName(person.name || '');
+    setEditPersonAge(person.age ? person.age.toString() : '');
+    setEditPersonGender(person.gender);
+  }
+
+  async function savePersonChanges(personId: string) {
+    setSavingPersonId(personId);
+    try {
+      const ageNum = editPersonAge ? parseInt(editPersonAge, 10) : null;
+      const isVoter = ageNum ? ageNum >= 18 : false;
+
+      await householdsApi.update(household.id, {
+        persons: household.persons.map((p) =>
+          p.id === personId
+            ? {
+                name: editPersonName.trim() || null,
+                age: ageNum,
+                gender: editPersonGender,
+                is_voter: isVoter,
+              }
+            : {
+                name: p.name,
+                age: p.age,
+                gender: p.gender,
+                is_voter: p.is_voter,
+              }
+        ),
+      });
+
+      Alert.alert(t('Updated'), t('Person details updated successfully.'));
+      setEditingPersonId(null);
+      onRefresh?.();
+    } catch (err: any) {
+      Alert.alert(t('Error'), err.message ?? t('Failed to update person.'));
+    } finally {
+      setSavingPersonId(null);
+    }
+  }
+
+  async function addNewPerson() {
+    setAddingPerson(true);
+    try {
+      await householdsApi.update(household.id, {
+        persons: [
+          ...household.persons.map((p) => ({
+            name: p.name,
+            age: p.age,
+            gender: p.gender,
+            is_voter: p.is_voter,
+          })),
+          {
+            name: null,
+            age: null,
+            gender: null,
+            is_voter: false,
+          },
+        ],
+      });
+
+      Alert.alert(t('Added'), t('New person added. Edit to add details.'));
+      onRefresh?.();
+    } catch (err: any) {
+      Alert.alert(t('Error'), err.message ?? t('Failed to add person.'));
+    } finally {
+      setAddingPerson(false);
+    }
   }
 
   return (
@@ -423,42 +522,146 @@ function HouseholdDetail({
               <StatMini label={t('Non-Voters')} value={household.persons.length - voterCount} color={Colors.lightGray} />
             </View>
 
-            <Text style={styles.personsTitle}>{t('Persons')} ({household.persons.length})</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: Spacing.md, marginBottom: Spacing.sm }}>
+              <Text style={styles.personsTitle}>{t('Persons')} ({household.persons.length})</Text>
+              {isAdmin && (
+                <Pressable onPress={addNewPerson} disabled={addingPerson} style={styles.addPersonMiniBtn}>
+                  {addingPerson ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : (
+                    <>
+                      <Ionicons name="person-add-outline" size={14} color={Colors.primary} />
+                      <Text style={styles.addPersonMiniBtnText}>{t('Add')}</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+            </View>
           </>
         }
-        renderItem={({ item, index }) => (
-          <View style={styles.personRow}>
-            <View style={styles.personBadge}>
-              <Text style={styles.personBadgeText}>{index + 1}</Text>
+        renderItem={({ item, index }) => {
+          const isEditing = editingPersonId === item.id;
+          const ageNum = editPersonAge ? parseInt(editPersonAge, 10) : null;
+          const voterStatus = ageNum ? (ageNum >= 18 ? t('Eligible') : t('Not eligible')) : t('Unknown age');
+
+          if (isEditing && item.id) {
+            return (
+              <View style={[styles.personRow, { backgroundColor: Colors.primaryMuted + '22', borderColor: Colors.primary }]}>
+                <View style={styles.editPersonForm}>
+                  <Text style={styles.editPersonLabel}>{t('Name')}</Text>
+                  <TextInput
+                    style={styles.editPersonInput}
+                    value={editPersonName}
+                    onChangeText={setEditPersonName}
+                    placeholder={t('Person name')}
+                    placeholderTextColor={Colors.midGray}
+                    maxLength={120}
+                  />
+
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.editPersonLabel}>{t('Age')}</Text>
+                      <TextInput
+                        style={styles.editPersonInput}
+                        value={editPersonAge}
+                        onChangeText={setEditPersonAge}
+                        keyboardType="numeric"
+                        placeholder="-"
+                        placeholderTextColor={Colors.midGray}
+                        maxLength={3}
+                      />
+                      <Text style={styles.editPersonHint}>{voterStatus}</Text>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.editPersonLabel}>{t('Gender')}</Text>
+                      <View style={{ flexDirection: 'row', gap: 4 }}>
+                        {(['MALE', 'FEMALE', 'OTHER'] as GenderType[]).map((gender) => (
+                          <Pressable
+                            key={gender}
+                            onPress={() => setEditPersonGender(gender)}
+                            style={[
+                              styles.genderSelectBtn,
+                              editPersonGender === gender && styles.genderSelectBtnActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.genderSelectText,
+                                editPersonGender === gender && styles.genderSelectTextActive,
+                              ]}
+                            >
+                              {t(gender[0])}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: Spacing.sm }}>
+                    <ThemedButton
+                      title={savingPersonId === item.id ? t('Saving...') : t('Save')}
+                      onPress={() => savePersonChanges(item.id!)}
+                      loading={savingPersonId === item.id}
+                      size="sm"
+                      style={{ flex: 1 }}
+                    />
+                    <ThemedButton
+                      title={t('Cancel')}
+                      onPress={() => setEditingPersonId(null)}
+                      variant="outline"
+                      size="sm"
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                </View>
+              </View>
+            );
+          }
+
+          return (
+            <View style={styles.personRow}>
+              <View style={styles.personBadge}>
+                <Text style={styles.personBadgeText}>{index + 1}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personInfo}>
+                  {item.name?.trim() ? item.name.trim() : ''}{item.name?.trim() ? ' | ' : ''}{t(item.gender ?? 'Unknown')} | {t('Age')} {item.age ?? '?'}
+                </Text>
+              </View>
+              <View style={[styles.voterTag, { backgroundColor: item.is_voter ? '#16382A' : Colors.darkGray }]}>
+                <Ionicons
+                  name={item.is_voter ? 'checkmark-circle' : 'close-circle'}
+                  size={13}
+                  color={item.is_voter ? Colors.success : Colors.midGray}
+                />
+                <Text style={[styles.voterTagText, { color: item.is_voter ? Colors.success : Colors.midGray }]}>
+                  {item.is_voter ? t('Voter') : t('Non-voter')}
+                </Text>
+              </View>
+              {isAdmin && item.id && (
+                <>
+                  <Pressable
+                    onPress={() => startEditPerson(item)}
+                    style={{ padding: 4, marginLeft: 4 }}
+                  >
+                    <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => confirmDeletePerson(item.id!, item.name)}
+                    disabled={deletingPersonId === item.id}
+                    style={{ padding: 4 }}
+                  >
+                    {deletingPersonId === item.id
+                      ? <ActivityIndicator size="small" color={Colors.error} />
+                      : <Ionicons name="close-circle" size={18} color={Colors.error} />}
+                  </Pressable>
+                </>
+              )}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.personInfo}>
-                {item.name?.trim() ? item.name.trim() : ''}{item.name?.trim() ? ' | ' : ''}{t(item.gender ?? 'Unknown')} | {t('Age')} {item.age ?? '?'}
-              </Text>
-            </View>
-            <View style={[styles.voterTag, { backgroundColor: item.is_voter ? '#16382A' : Colors.darkGray }]}>
-              <Ionicons
-                name={item.is_voter ? 'checkmark-circle' : 'close-circle'}
-                size={13}
-                color={item.is_voter ? Colors.success : Colors.midGray}
-              />
-              <Text style={[styles.voterTagText, { color: item.is_voter ? Colors.success : Colors.midGray }]}>
-                {item.is_voter ? t('Voter') : t('Non-voter')}
-              </Text>
-            </View>
-            {isAdmin && item.id && (
-              <Pressable
-                onPress={() => confirmDeletePerson(item.id!, item.name)}
-                disabled={deletingPersonId === item.id}
-                style={{ padding: 4, marginLeft: 4 }}
-              >
-                {deletingPersonId === item.id
-                  ? <ActivityIndicator size="small" color={Colors.error} />
-                  : <Ionicons name="close-circle" size={18} color={Colors.error} />}
-              </Pressable>
-            )}
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={<Text style={styles.noPerson}>{t('No persons recorded.')}</Text>}
       />
     </View>
@@ -730,5 +933,68 @@ const styles = StyleSheet.create({
     minHeight: 60,
     textAlignVertical: 'top',
     marginBottom: Spacing.sm,
+  },
+  // ── Person edit form ──
+  editPersonForm: {
+    width: '100%',
+  },
+  editPersonLabel: {
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    marginBottom: 6,
+    letterSpacing: 0.4,
+  },
+  editPersonInput: {
+    backgroundColor: Colors.bgCardRaised,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 10,
+    fontSize: FontSizes.sm,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginBottom: Spacing.md,
+  },
+  editPersonHint: {
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  genderSelectBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCardRaised,
+  },
+  genderSelectBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  genderSelectText: {
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  genderSelectTextActive: {
+    color: Colors.textPrimary,
+  },
+  addPersonMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryMuted,
+  },
+  addPersonMiniBtnText: {
+    fontSize: FontSizes.xs,
+    color: Colors.primary,
+    fontWeight: '700',
   },
 });

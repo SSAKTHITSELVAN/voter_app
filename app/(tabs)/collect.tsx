@@ -120,14 +120,38 @@ export default function CollectScreen() {
         );
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      
+      // Implement timeout with Promise.race
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('GPS timeout')), 10000)
+      );
+      
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        }),
+        timeoutPromise
+      ]) as Awaited<ReturnType<typeof Location.getCurrentPositionAsync>>;
+      
+      // Validate GPS accuracy (horizontal accuracy should be < 50 meters for good accuracy)
+      const horizontalAccuracy = loc.coords.accuracy ?? 999;
+      if (horizontalAccuracy > 50) {
+        showBanner(
+          'warning',
+          t('GPS accuracy is low ({{accuracy}}m). Try in an open area.', { accuracy: Math.round(horizontalAccuracy) }),
+          5000
+        );
+      }
+      
       setLatitude(loc.coords.latitude.toFixed(7));
       setLongitude(loc.coords.longitude.toFixed(7));
       setGpsAcquired(true);
-    } catch {
-      Alert.alert(t('GPS error'), t('Could not get location. Please retry or enter it manually.'));
+      showBanner('success', t('GPS coordinates acquired (Accuracy: {{acc}}m)', { acc: Math.round(horizontalAccuracy) }), 2000);
+    } catch (error: any) {
+      const errorMsg = error?.message?.includes('timeout') 
+        ? t('GPS timeout. Ensure location is enabled and you are near a clear sky.')
+        : t('Could not get location. Please retry or enter it manually.');
+      showBanner('error', errorMsg, 5000);
     } finally {
       setGpsLoading(false);
     }
